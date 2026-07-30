@@ -1,0 +1,33 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/*.db
+backend/.pytest_cache/
+backend/.mypy_cache/
+
+# Environment
+.env
+backend/.env
+frontend/.env.local
+
+# Node
+frontend/node_modules/
+
+# Build
+frontend/dist/
+frontend/.next/
+frontend/build/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Vector stores / generated data
+backend/vectorstore/
+backend/uploads/
