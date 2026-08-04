@@ -33,7 +33,8 @@ _RETRIEVAL_CACHE_LOCK = threading.Lock()
 _BM25_CACHE: dict[tuple[str, str, str], BM25Retriever] = {}
 _BM25_CACHE_LOCK = threading.Lock()
 _FIGURE_REFERENCE_PATTERN = re.compile(
-    r"\bfig(?:ure)?\.?\s*(?:\d+\s*-\s*)?(\d+)(?=[:.\s?]|$)",
+    # Captures the full label including optional chapter prefix, e.g. "7-1" or just "1"
+    r"\bfig(?:ure)?\.?\s*((?:\d+\s*-\s*)?\d+)(?=[:.\s?]|$)",
     re.IGNORECASE,
 )
 
@@ -133,14 +134,47 @@ def _metadata_boost(document: Document, preferences: Optional[Mapping[str, Any]]
     return weight if _matches_metadata(document, preferences) else 0.0
 
 
-def _figure_number_from_query(query: str) -> Optional[int]:
-    """Return the explicit figure number requested by a user, if any."""
+def _figure_label_from_query(query: str) -> Optional[str]:
+    """Return the full figure label from query (e.g. '7-1' or '3'), or None."""
     match = _FIGURE_REFERENCE_PATTERN.search(query)
-    return int(match.group(1)) if match else None
+    if not match:
+        return None
+    # Normalise whitespace around the dash so '7 - 1' → '7-1'
+    return re.sub(r"\s*-\s*", "-", match.group(1).strip())
+
+
+# Keep the old name as an alias for backwards compat with any test imports.
+def _figure_number_from_query(query: str) -> Optional[int]:
+    """Return the trailing integer from a figure label in *query*, or None."""
+    label = _figure_label_from_query(query)
+    if label is None:
+        return None
+    # e.g. '7-1' → 1,  '3' → 3
+    return int(label.split("-")[-1])
 
 
 def _figure_caption_documents(save_path: str, figure_number: int) -> List[Document]:
     """Load exact caption chunks for a figure before normal hybrid retrieval."""
+    return _figure_label_documents(save_path, str(figure_number), figure_number)
+
+
+def _figure_label_documents(
+    save_path: str, full_label: str, trailing_number: int
+) -> List[Document]:
+    """Return chunks that reference *full_label* exactly (e.g. '7-1').
+
+    Strategy
+    --------
+    - Always scan chunk text for the **exact full label** (e.g. "Figure 7-1").
+      This is the only reliable match for hyphenated labels.
+    - For simple (non-hyphenated) labels such as "3", also allow a
+      metadata-number fallback so plain "Figure 3" queries still work.
+    - **Never** fall back to trailing-number matching for hyphenated labels
+      (e.g. trailing number of "7-1" is 1, which would wrongly return
+      Figure 1-1, Figure 2-1, Figure 3-1 …).
+    - Return empty list when the figure is not found — the LLM will then
+      correctly report that it couldn't find the figure.
+    """
     try:
         chunks = store.load_chunks(save_path)
     except VectorStoreLoadError:
@@ -149,12 +183,53 @@ def _figure_caption_documents(save_path: str, figure_number: int) -> List[Docume
 
     if not chunks:
         return []
-    return [
-        chunk
-        for chunk in chunks
-        if chunk.metadata.get("is_caption") is True
-        and chunk.metadata.get("figure_number") == figure_number
-    ]
+
+    is_hyphenated = "-" in full_label
+
+    # Build a pattern that matches the full label, tolerating spacing around dashes
+    label_escaped = re.escape(full_label).replace(r"\-", r"\s*-\s*")
+    label_pattern = re.compile(
+        r"\bfig(?:ure)?\.?\s*" + label_escaped + r"(?=[:.?\s]|$)",
+        re.IGNORECASE,
+    )
+
+    # Also match the stored figure_label metadata (set by ingest.py for new uploads)
+    exact_label_hits: list[Document] = []
+    number_only_hits: list[Document] = []
+
+    for chunk in chunks:
+        meta = chunk.metadata or {}
+
+        # Check stored figure_label metadata first (precise, set during ingest)
+        stored_label: str = meta.get("figure_label", "")
+        if stored_label and stored_label == full_label:
+            exact_label_hits.append(chunk)
+            continue
+
+        # Fallback: scan the raw text for the full label pattern
+        if label_pattern.search(chunk.page_content):
+            exact_label_hits.append(chunk)
+            continue
+
+        # For simple (non-hyphenated) labels only: allow number-metadata fallback
+        if not is_hyphenated:
+            fig_num = meta.get("figure_number")
+            if fig_num == trailing_number or trailing_number in (meta.get("figure_numbers") or []):
+                number_only_hits.append(chunk)
+
+    if exact_label_hits:
+        return exact_label_hits
+
+    # Only use number fallback for simple labels (e.g. "Figure 3", not "Figure 7-1")
+    if not is_hyphenated and number_only_hits:
+        return number_only_hits
+
+    # Figure not found in document — return empty so the LLM reports "not found"
+    logger.info(
+        "_figure_label_documents: no chunks found for label=%r in %s", full_label, save_path
+    )
+    return []
+
 
 
 def _sigmoid(value: float) -> float:
@@ -371,12 +446,18 @@ def retrieve(
     if vectorstore is None:
         raise DocumentNotIndexedError(f"No index exists at {save_path}")
 
-    figure_number = _figure_number_from_query(query)
-    figure_captions = (
-        _figure_caption_documents(save_path, figure_number)
-        if figure_number is not None
-        else []
-    )
+    # ── Figure pre-injection ─────────────────────────────────────────────────
+    figure_label = _figure_label_from_query(query)     # e.g. '7-1' or None
+    figure_number = _figure_number_from_query(query)  # trailing int, e.g. 1
+    figure_captions: List[Document] = []
+
+    if figure_label is not None and figure_number is not None:
+        figure_captions = _figure_label_documents(save_path, figure_label, figure_number)
+        # Inject an exact-label query variant so BM25 also targets body chunks
+        # that mention e.g. "Figure 7-1" even without a tagged caption chunk.
+        label_variant = f"Figure {figure_label}"
+        if label_variant not in variants:
+            variants.append(label_variant)
 
     key = _cache_key(
         query=query,

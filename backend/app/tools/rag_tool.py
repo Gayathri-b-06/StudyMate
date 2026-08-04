@@ -34,8 +34,12 @@ def get_vectorstore_paths_for_thread(thread_id: str) -> list[str]:
         db.close()
 
 
-def _format_context(chunks: list["RetrievedChunk"]) -> str:
-    """Format retrieved chunks with stable source citations for the model."""
+def _format_context(chunks: list["RetrievedChunk"], max_total_chars: int = 6000) -> str:
+    """Format retrieved chunks with stable source citations for the model.
+
+    ``max_total_chars`` caps the total context length so large PDFs cannot
+    push requests over Groq's free-tier token limit.
+    """
     if not chunks:
         return (
             "No relevant uploaded-document context was found. State this clearly "
@@ -43,10 +47,17 @@ def _format_context(chunks: list["RetrievedChunk"]) -> str:
         )
 
     sections = []
+    total_chars = 0
     for number, chunk in enumerate(chunks, start=1):
         source_name = Path(chunk.source).name if chunk.source else "document"
         page = f", page {chunk.page + 1}" if chunk.page is not None else ""
-        sections.append(f"[SOURCE:{number}] {source_name}{page}\n{chunk.content}")
+        # Truncate individual chunks to avoid a single monster chunk blowing the limit
+        content = chunk.content[:1500] if len(chunk.content) > 1500 else chunk.content
+        entry = f"[SOURCE:{number}] {source_name}{page}\n{content}"
+        if total_chars + len(entry) > max_total_chars:
+            break
+        sections.append(entry)
+        total_chars += len(entry)
     return "Retrieved uploaded-document context:\n\n" + "\n\n".join(sections)
 
 
@@ -99,8 +110,8 @@ def create_rag_tool(
                     path,
                     embeddings,
                     use_hybrid_search=True,
-                    k=15,
-                    rerank_top_k=6,
+                    k=8,           # reduced from 15 to save tokens
+                    rerank_top_k=4, # reduced from 6 to save tokens
                 ))
             except DocumentNotIndexedError:
                 continue

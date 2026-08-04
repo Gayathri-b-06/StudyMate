@@ -27,11 +27,21 @@ QUIZ TOOL RULES:
 """
 
 
+GENERAL_CHAT_SYSTEM_PROMPT = """You are StudyMate, a friendly AI study assistant.
+You are currently in general conversation mode — no documents have been searched and no tools are available.
+
+Answer the user's question directly from your own knowledge.
+- For greetings, small talk, and pleasantries: respond warmly and naturally.
+- For general knowledge questions (e.g. capital cities, historical facts, science basics): answer concisely and accurately from your own knowledge. Do NOT say you are searching documents — you are not.
+- Do NOT mention document search, uploaded files, or any tools.
+- Keep responses friendly, concise, and helpful."""
+
+
 def with_memory_context(memory_context: str) -> str:
-    """Append compact cross-thread memory only for a newly started conversation."""
+    """Return the general-chat system prompt, optionally with cross-thread memory context."""
     if not memory_context:
-        return CHATBOT_SYSTEM_PROMPT
-    return f"{CHATBOT_SYSTEM_PROMPT}\n\nStudent memory (use gently; do not claim certainty): {memory_context}"
+        return GENERAL_CHAT_SYSTEM_PROMPT
+    return f"{GENERAL_CHAT_SYSTEM_PROMPT}\n\nStudent memory (use gently; do not claim certainty): {memory_context}"
 """System instruction applied to every chatbot graph invocation."""
 
 GROUNDED_ANSWER_SYSTEM_PROMPT = """You are answering a question using retrieved uploaded document context.

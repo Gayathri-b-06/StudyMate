@@ -336,20 +336,28 @@ class ChatService:
                             "Manual tool execution fallback failed for tool %r.", tool_name
                         )
 
-            # Last-resort: ask the model to answer without any tools at all.
+            # Fallback: re-invoke the graph (or answer without tools)
             try:
-                text, citations, artifacts = self._invoke_without_tools(user_message, thread_id)
-                return text, citations, artifacts, []
+                return self._invoke(
+                    user_message, thread_id, reuse_pending_user_message=True
+                )
             except Exception:
-                logger.exception(
-                    "No-tool fallback failed after Groq returned tool_use_failed."
-                )
-                return (
-                    "I couldn't complete that tool request. Please try again.",
-                    [],
-                    [],
-                    [],
-                )
+                try:
+                    text, citations, artifacts = self._invoke_without_tools(
+                        user_message, thread_id
+                    )
+                    return text, citations, artifacts, []
+                except Exception:
+                    logger.exception(
+                        "No-tool fallback failed after Groq returned tool_use_failed."
+                    )
+                    return (
+                        "I couldn't complete that tool request. Please try again.",
+                        [],
+                        [],
+                        [],
+                    )
+
 
     def _answer_with_manual_tool_result(
         self,

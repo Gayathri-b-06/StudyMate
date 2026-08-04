@@ -60,12 +60,16 @@ def send_chat_message(
         error_code = (
             body.get("error", {}).get("code") if isinstance(body, dict) else None
         )
-        if error_code != "tool_use_failed":
+        error_msg = str(
+            body.get("error", {}).get("message", "") if isinstance(body, dict) else error
+        ).lower()
+        if error_code != "tool_use_failed" and "tool call validation failed" not in error_msg:
             logger.exception("Groq rejected the chat request.")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="The AI provider rejected this request. Please try again.",
             ) from error
+
 
         logger.exception("Groq rejected an invalid model-generated tool call.")
         assistant_message = (

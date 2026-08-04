@@ -19,32 +19,40 @@ from langsmith import traceable
 logger = logging.getLogger(__name__)
 
 _FIGURE_REFERENCE_PATTERN = re.compile(
-    r"\bfig(?:ure)?\.?\s*(?:\d+\s*-\s*)?(\d+)(?=[:.\s]|$)",
+    # Captures the full label including optional chapter prefix, e.g. "7-1" or just "1"
+    r"\bfig(?:ure)?\.?\s*((?:\d+\s*-\s*)?\d+)(?=[:.\s]|$)",
     re.IGNORECASE,
 )
 _FIGURE_CAPTION_PATTERN = re.compile(
-    r"(?im)^\s*fig(?:ure)?\.?\s*(?:\d+\s*-\s*)?(\d+)(?=[:.\s]|$)",
+    r"(?im)^\s*fig(?:ure)?\.?\s*((?:\d+\s*-\s*)?\d+)(?=[:.\s]|$)",
 )
 
 
 def annotate_figure_metadata(chunks: List[Document]) -> None:
     """Tag chunks that mention figures and identify caption chunks.
 
-    The final numeric component is used for hierarchical labels such as
-    ``Figure 2-40`` so a query for "figure 40" can match its caption.
-    ``figure_numbers`` preserves every figure reference in a body chunk while
-    ``figure_number`` keeps the primary value convenient for existing metadata
-    filters and diagnostics.
+    The ``figure_label`` field stores the full label (e.g. '7-1') for precise
+    matching in the retriever.  ``figure_number`` retains the trailing integer
+    for backwards-compatible filters.  ``figure_numbers`` preserves every
+    trailing integer referenced in a body chunk.
     """
     for chunk in chunks:
-        references = [int(match.group(1)) for match in _FIGURE_REFERENCE_PATTERN.finditer(chunk.page_content)]
-        if not references:
+        matches = list(_FIGURE_REFERENCE_PATTERN.finditer(chunk.page_content))
+        if not matches:
             continue
 
+        # Normalise: strip whitespace around dashes
+        import re as _re
+        labels = [_re.sub(r"\s*-\s*", "-", m.group(1).strip()) for m in matches]
+        trailing_numbers = [int(label.split("-")[-1]) for label in labels]
+
         caption_match = _FIGURE_CAPTION_PATTERN.search(chunk.page_content)
-        primary_number = int(caption_match.group(1)) if caption_match else references[0]
-        chunk.metadata["figure_number"] = primary_number
-        chunk.metadata["figure_numbers"] = list(dict.fromkeys(references))
+        primary_label = _re.sub(r"\s*-\s*", "-", caption_match.group(1).strip()) if caption_match else labels[0]
+        primary_number = int(primary_label.split("-")[-1])
+
+        chunk.metadata["figure_label"] = primary_label          # e.g. '7-1'
+        chunk.metadata["figure_number"] = primary_number        # e.g. 1  (trailing int)
+        chunk.metadata["figure_numbers"] = list(dict.fromkeys(trailing_numbers))
         chunk.metadata["is_caption"] = caption_match is not None
 
 

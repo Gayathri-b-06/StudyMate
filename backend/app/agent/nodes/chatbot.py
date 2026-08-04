@@ -67,6 +67,81 @@ def _invoke_and_log(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# History trimmer — keeps token usage within Groq free-tier limits
+# ─────────────────────────────────────────────────────────────────────────────
+
+_HISTORY_WINDOW = 6  # keep last N messages (≈ 3 user+assistant turns)
+
+def _trim_history(messages: Sequence[AnyMessage]) -> list[AnyMessage]:
+    """Return the most recent *_HISTORY_WINDOW* messages.
+
+    Trimming the conversation history is the single most effective way to
+    stay within Groq's free-tier 12 K TPM limit.  Earlier turns are already
+    stored in the LangGraph checkpoint and can be reviewed via thread history;
+    the LLM only needs recent context to give coherent replies.
+    """
+    return list(messages[-_HISTORY_WINDOW:])
+
+
+def _messages_for_model(
+    messages: Sequence[AnyMessage],
+    last_message: AnyMessage | None = None,
+) -> list[AnyMessage]:
+    """Filter raw thread history to return conversational human and assistant messages."""
+    result: list[AnyMessage] = []
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            result.append(msg)
+        elif isinstance(msg, AIMessage):
+            if not getattr(msg, "tool_calls", None):
+                result.append(msg)
+    return result
+
+
+def _tools_for_turn(
+    tools: list[BaseTool],
+    last_message: AnyMessage,
+) -> list[BaseTool]:
+    """Determine available tools for a turn based on message type and intent."""
+    if isinstance(last_message, ToolMessage):
+        tool_name = getattr(last_message, "name", "")
+        return [t for t in tools if t.name == tool_name]
+
+    content = str(getattr(last_message, "content", "")).strip()
+    if not content:
+        return tools
+
+    from app.agent.intent_router import Intent, classify_intent
+    intent = classify_intent(content)
+
+    if intent == Intent.GENERAL_CHAT:
+        return []
+    elif intent == Intent.PROGRESS:
+        return [t for t in tools if t.name == "get_study_progress"]
+    else:
+        return [t for t in tools if t.name != "get_study_progress"]
+
+
+
+def _safe_bind_tool(llm: BaseChatModel, tool: BaseTool | None) -> BaseChatModel:
+    """Safely bind a tool to an LLM, gracefully handling None tools or test doubles."""
+    if tool is None:
+        return llm
+    try:
+        return llm.bind_tools([tool])
+    except (NotImplementedError, AttributeError):
+        return llm
+
+
+def _safe_bind_no_tools(llm: BaseChatModel) -> BaseChatModel:
+    """Safely configure an LLM with tool_choice="none" for post-tool synthesis."""
+    try:
+        return llm.bind_tools([], tool_choice="none")
+    except (NotImplementedError, AttributeError):
+        return llm
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # General chat — no tools
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -86,7 +161,11 @@ def create_general_chat_node(
         )
         system_prompt = with_memory_context(memory_context)
         logger.info("general_chat: answering without tools")
-        response = _invoke_and_log(llm, [SystemMessage(content=system_prompt)] + list(messages), "general_chat")
+        response = _invoke_and_log(
+            llm,
+            [SystemMessage(content=system_prompt)] + _trim_history(messages),
+            "general_chat",
+        )
         return {"messages": [response]}
 
     return general_chat
@@ -96,17 +175,17 @@ def create_general_chat_node(
 # Document QA — binds search_uploaded_documents only
 # ─────────────────────────────────────────────────────────────────────────────
 
-def create_document_qa_node(llm: BaseChatModel, rag_tool: BaseTool) -> ChatbotNode:
+def create_document_qa_node(llm: BaseChatModel, rag_tool: BaseTool | None) -> ChatbotNode:
     """Node for DOCUMENT_QA intent: binds only the RAG tool."""
 
-    bound = llm.bind_tools([rag_tool])
+    bound = _safe_bind_tool(llm, rag_tool)
 
     def document_qa(state: AgentState, config: RunnableConfig) -> dict[str, list[AnyMessage]]:
         messages = state.get("messages", [])
         logger.info("document_qa: binding search_uploaded_documents")
         response = _invoke_and_log(
             bound,
-            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + list(messages),
+            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + _trim_history(messages),
             "document_qa",
         )
         return {"messages": [response]}
@@ -118,17 +197,17 @@ def create_document_qa_node(llm: BaseChatModel, rag_tool: BaseTool) -> ChatbotNo
 # Quiz — binds generate_document_quiz only
 # ─────────────────────────────────────────────────────────────────────────────
 
-def create_quiz_node(llm: BaseChatModel, quiz_tool: BaseTool) -> ChatbotNode:
+def create_quiz_node(llm: BaseChatModel, quiz_tool: BaseTool | None) -> ChatbotNode:
     """Node for QUIZ intent: binds only the quiz-generation tool."""
 
-    bound = llm.bind_tools([quiz_tool])
+    bound = _safe_bind_tool(llm, quiz_tool)
 
     def quiz(state: AgentState, config: RunnableConfig) -> dict[str, list[AnyMessage]]:
         messages = state.get("messages", [])
         logger.info("quiz: binding generate_document_quiz")
         response = _invoke_and_log(
             bound,
-            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + list(messages),
+            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + _trim_history(messages),
             "quiz",
         )
         return {"messages": [response]}
@@ -140,17 +219,17 @@ def create_quiz_node(llm: BaseChatModel, quiz_tool: BaseTool) -> ChatbotNode:
 # Flashcard — binds generate_document_flashcards only
 # ─────────────────────────────────────────────────────────────────────────────
 
-def create_flashcard_node(llm: BaseChatModel, flashcard_tool: BaseTool) -> ChatbotNode:
+def create_flashcard_node(llm: BaseChatModel, flashcard_tool: BaseTool | None) -> ChatbotNode:
     """Node for FLASHCARD intent: binds only the flashcard tool."""
 
-    bound = llm.bind_tools([flashcard_tool])
+    bound = _safe_bind_tool(llm, flashcard_tool)
 
     def flashcard(state: AgentState, config: RunnableConfig) -> dict[str, list[AnyMessage]]:
         messages = state.get("messages", [])
         logger.info("flashcard: binding generate_document_flashcards")
         response = _invoke_and_log(
             bound,
-            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + list(messages),
+            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + _trim_history(messages),
             "flashcard",
         )
         return {"messages": [response]}
@@ -162,17 +241,17 @@ def create_flashcard_node(llm: BaseChatModel, flashcard_tool: BaseTool) -> Chatb
 # Study plan — binds generate_document_study_plan only
 # ─────────────────────────────────────────────────────────────────────────────
 
-def create_study_plan_node(llm: BaseChatModel, study_plan_tool: BaseTool) -> ChatbotNode:
+def create_study_plan_node(llm: BaseChatModel, study_plan_tool: BaseTool | None) -> ChatbotNode:
     """Node for STUDY_PLAN intent: binds only the study-planner tool."""
 
-    bound = llm.bind_tools([study_plan_tool])
+    bound = _safe_bind_tool(llm, study_plan_tool)
 
     def study_plan(state: AgentState, config: RunnableConfig) -> dict[str, list[AnyMessage]]:
         messages = state.get("messages", [])
         logger.info("study_plan: binding generate_document_study_plan")
         response = _invoke_and_log(
             bound,
-            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + list(messages),
+            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + _trim_history(messages),
             "study_plan",
         )
         return {"messages": [response]}
@@ -184,17 +263,17 @@ def create_study_plan_node(llm: BaseChatModel, study_plan_tool: BaseTool) -> Cha
 # Progress — binds get_study_progress only
 # ─────────────────────────────────────────────────────────────────────────────
 
-def create_progress_node(llm: BaseChatModel, progress_tool: BaseTool) -> ChatbotNode:
+def create_progress_node(llm: BaseChatModel, progress_tool: BaseTool | None) -> ChatbotNode:
     """Node for PROGRESS intent: binds only the study-progress tool."""
 
-    bound = llm.bind_tools([progress_tool])
+    bound = _safe_bind_tool(llm, progress_tool)
 
     def progress(state: AgentState, config: RunnableConfig) -> dict[str, list[AnyMessage]]:
         messages = state.get("messages", [])
         logger.info("progress: binding get_study_progress")
         response = _invoke_and_log(
             bound,
-            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + list(messages),
+            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + _trim_history(messages),
             "progress",
         )
         return {"messages": [response]}
@@ -222,7 +301,7 @@ def create_synthesis_node(llm: BaseChatModel) -> ChatbotNode:
     Uses ``state["intent"]`` to select the correct result system prompt so
     the model knows how to present each tool's structured output.
     """
-    no_tool = llm.bind_tools([], tool_choice="none") if hasattr(llm, "bind_tools") else llm
+    no_tool = _safe_bind_no_tools(llm)
 
     def synthesis(state: AgentState, config: RunnableConfig) -> dict[str, list[AnyMessage]]:
         intent = state.get("intent", "document_qa")
@@ -231,12 +310,13 @@ def create_synthesis_node(llm: BaseChatModel) -> ChatbotNode:
         logger.info("synthesis: intent=%s, composing final answer", intent)
         response = _invoke_and_log(
             no_tool,
-            [SystemMessage(content=system_prompt)] + list(messages),
+            [SystemMessage(content=system_prompt)] + _trim_history(messages),
             "synthesis",
         )
         return {"messages": [response]}
 
     return synthesis
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
