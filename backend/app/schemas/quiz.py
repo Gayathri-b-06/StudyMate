@@ -12,6 +12,8 @@ class QuizQuestion(BaseModel):
     options: list[str] = Field(min_length=2)
     correct_index: int = Field(ge=0)
     explanation: str
+    source_citation: str | None = None
+
 
 
 class QuizGenerateRequest(BaseModel):

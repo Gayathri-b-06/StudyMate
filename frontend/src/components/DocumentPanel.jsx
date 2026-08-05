@@ -50,7 +50,8 @@ export default function DocumentPanel({ threadId }) {
   const fileInputRef = useRef(null)
   /* Load docs whenever threadId changes */
   useEffect(() => {
-    if (!threadId) { setDocuments([]); return }
+    if (!threadId || threadId === 'undefined') { setDocuments([]); return }
+
     let cancelled = false
     setIsLoading(true)
     setError('')

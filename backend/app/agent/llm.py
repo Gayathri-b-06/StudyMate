@@ -25,7 +25,8 @@ def create_llm() -> BaseChatModel:
     Raises:
         RuntimeError: If required Groq configuration is absent.
     """
-    load_dotenv(_BACKEND_DIR / ".env", override=False)
+    load_dotenv(_BACKEND_DIR / ".env", override=True)
+
 
     api_key = os.getenv("GROQ_API_KEY")
     model_name = os.getenv("GROQ_MODEL")
@@ -42,7 +43,8 @@ def create_llm() -> BaseChatModel:
 
 def create_quiz_llm() -> BaseChatModel:
     """Create the dedicated Groq client used only for quiz generation."""
-    load_dotenv(_BACKEND_DIR / ".env", override=False)
+    load_dotenv(_BACKEND_DIR / ".env", override=True)
+
 
     api_key = os.getenv("GROQ_QUIZ_API_KEY")
     model_name = os.getenv("GROQ_QUIZ_MODEL") or os.getenv("GROQ_MODEL")

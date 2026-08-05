@@ -150,6 +150,12 @@ _GENERAL_CHAT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bwhat\s+(?:is|was)\s+the\s+(?:population|currency|language|religion|president|prime\s+minister|founder|inventor|author|director)\s+of\b", re.IGNORECASE),
     # Explicit general-knowledge openers
     re.compile(r"^(?:in\s+general|just\s+curious|out\s+of\s+curiosity)[,\s]", re.IGNORECASE),
+    # Conversational chat / talk requests & responses
+    re.compile(r"\b(?:just\s+)?(?:want\s+to\s+|like\s+to\s+|let'?s\s+|can\s+we\s+|would\s+like\s+to\s+)?(?:chat|talk|converse)\b", re.IGNORECASE),
+    re.compile(r"\b(?:just\s+)?(?:chat|talk|conversing)\s*(?:with\s+me|with\s+you|together)?\b", re.IGNORECASE),
+    re.compile(r"\b(?:i'?m\s+good|just\s+chilling|nothing\s+much|all\s+good|doing\s+fine|not\s+much)\b", re.IGNORECASE),
+    # Opinion & thought queries
+    re.compile(r"\bwhat\s+(?:are\s+your\s+thoughts|do\s+you\s+think|is\s+your\s+opinion|is\s+your\s+view|is\s+your\s+take)\b", re.IGNORECASE),
     # Fun / general questions
     re.compile(r"\btell\s+me\s+(?:a\s+)?(?:joke|fun\s+fact|fact)\b", re.IGNORECASE),
 )

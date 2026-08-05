@@ -21,6 +21,9 @@ class ThreadResponse(BaseModel):
     updated_at: datetime
 
 
+from typing import Any
+
+
 class ThreadChatMessage(BaseModel):
     """Single message in a thread's conversation history."""
 
@@ -30,3 +33,8 @@ class ThreadChatMessage(BaseModel):
         default_factory=list,
         description="Optional list of source document citations if retrieval was used.",
     )
+    progress_data: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional snapshot of structured study progress data for thread history.",
+    )
+

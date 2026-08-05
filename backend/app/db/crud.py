@@ -23,7 +23,9 @@ Design principles
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+
 
 from app.db.models import (
     Document,
@@ -329,14 +331,53 @@ def save_topics_cache(db: Session, document_id: str, topics_json: str) -> Topics
 
 
 def save_user_memory(
-    db: Session, user_id: str, fact_type: MemoryFactType | str, topic: str | None,
-    detail: str, document_id: str | None = None,
+    db: Session,
+    user_id: str,
+    fact_type: MemoryFactType | str,
+    topic: str | None,
+    detail: str,
+    document_id: str | None = None,
+    reason: str = "quiz_score",
 ) -> UserMemory:
-    """Persist one short, user-scoped memory fact."""
+    """Persist or update (upsert) a user-scoped memory fact to prevent duplicate rows per topic."""
     fact = MemoryFactType(fact_type)
-    memory = UserMemory(user_id=user_id, fact_type=fact, topic=topic, detail=detail[:500], document_id=document_id)
-    db.add(memory); db.commit(); db.refresh(memory)
+    clean_topic = topic.strip() if topic else None
+
+    existing: UserMemory | None = None
+    if clean_topic:
+        existing = (
+            db.query(UserMemory)
+            .filter(
+                UserMemory.user_id == user_id,
+                UserMemory.fact_type == fact,
+                func.lower(UserMemory.topic) == clean_topic.lower(),
+            )
+            .first()
+        )
+
+    if existing is not None:
+        existing.detail = detail[:500]
+        existing.reason = reason
+        if document_id:
+            existing.document_id = document_id
+        existing.created_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    memory = UserMemory(
+        user_id=user_id,
+        fact_type=fact,
+        topic=clean_topic,
+        reason=reason,
+        detail=detail[:500],
+        document_id=document_id,
+    )
+    db.add(memory)
+    db.commit()
+    db.refresh(memory)
     return memory
+
 
 
 def get_user_memory(

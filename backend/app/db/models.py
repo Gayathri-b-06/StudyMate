@@ -222,9 +222,11 @@ class UserMemory(Base):
     user_id: Mapped[str] = mapped_column(String, nullable=False, default=DEFAULT_USER_ID)
     fact_type: Mapped[MemoryFactType] = mapped_column(SqlEnum(MemoryFactType), nullable=False)
     topic: Mapped[str | None] = mapped_column(String, nullable=True)
+    reason: Mapped[str] = mapped_column(String, nullable=False, default="quiz_score")
     detail: Mapped[str] = mapped_column(String, nullable=False)
     document_id: Mapped[str | None] = mapped_column(String, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
 
 
 class QuizAttempt(Base):

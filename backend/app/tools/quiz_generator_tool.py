@@ -107,6 +107,7 @@ def generate_quiz(
                 "options": ["...", "...", "...", "..."],
                 "correct_index": 0,
                 "explanation": "...",
+                "source_citation": "filename.pdf, page 14",
             }
         ],
     }
@@ -114,7 +115,7 @@ def generate_quiz(
         content=(
             "You create multiple-choice quizzes using only the supplied document context. "
             "Never use outside knowledge or invent facts. Return ONLY valid JSON, with no markdown fences or prose. "
-            "Every question must have options and a zero-based correct_index."
+            "Every question must have options, a zero-based correct_index, explanation, and source_citation indicating the exact filename and page from the context."
         )
     )
     prompt = HumanMessage(
@@ -124,6 +125,7 @@ def generate_quiz(
             f"Document context:\n{context}"
         )
     )
+
     raw = _response_content(llm.invoke([system, prompt]))
     try:
         result = _validate_quiz_json(

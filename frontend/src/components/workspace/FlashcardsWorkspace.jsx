@@ -1,28 +1,15 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion'
+import confetti from 'canvas-confetti'
 import { generateFlashcards } from '../../lib/flashcardsApi'
 import { reportFlashcardResult } from '../../lib/progressApi'
+import IndexTab from '../common/IndexTab'
 import FlashcardsSetupForm from './FlashcardsSetupForm'
 
 /* ── Icons ──────────────────────────────────────────────── */
-function RefreshIcon() {
-  return (
-    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15" />
-    </svg>
-  )
-}
-
-function PlusCircleIcon() {
-  return (
-    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
-    </svg>
-  )
-}
-
 function ChevronLeftIcon() {
   return (
-    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
     </svg>
   )
@@ -30,354 +17,520 @@ function ChevronLeftIcon() {
 
 function ChevronRightIcon() {
   return (
-    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
     </svg>
   )
 }
 
-function LightbulbIcon() {
+function FlipIcon() {
   return (
-    <svg className="size-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15" />
+    </svg>
+  )
+}
+
+function ClockIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  )
+}
+
+function RefreshCwIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15" />
+    </svg>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  )
+}
+
+function SparklesIcon() {
+  return (
+    <svg className="size-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
     </svg>
   )
 }
 
-/* ── FlashCard (single card with flip) ─────────────────── */
-function FlashCard({ card, isFlipped, onFlip }) {
-  return (
-    <div
-      className="relative w-full cursor-pointer select-none"
-      style={{ perspective: '1200px', minHeight: '220px' }}
-      onClick={onFlip}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onFlip()}
-      aria-label={isFlipped ? 'Card back — click to see front' : 'Card front — click to reveal answer'}
-    >
-      <div
-        className="relative w-full h-full transition-transform duration-500 ease-in-out"
-        style={{
-          transformStyle: 'preserve-3d',
-          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-          minHeight: '220px',
-        }}
-      >
-        {/* Front */}
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border border-teal-500/30 bg-gradient-to-br from-slate-900 to-teal-950/30 p-6 shadow-xl shadow-teal-900/20 backface-hidden"
-          style={{ backfaceVisibility: 'hidden' }}
-        >
-          <span className="text-xs font-semibold uppercase tracking-widest text-teal-500/70">Term / Question</span>
-          <p className="text-center text-base font-semibold leading-relaxed text-white">{card.front}</p>
-          <span className="mt-2 text-[10px] text-slate-500">Click to reveal answer</span>
-        </div>
+/* ── Circular Progress Ring Component ───────────────────────────── */
+function CircularProgress({ value = 0, size = 48, strokeWidth = 4 }) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const offset = circumference - (value / 100) * circumference
 
-        {/* Back */}
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-slate-900 to-emerald-950/20 p-6 shadow-xl shadow-emerald-900/20"
-          style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
-        >
-          <span className="text-xs font-semibold uppercase tracking-widest text-emerald-500/70">Answer</span>
-          <p className="text-center text-sm leading-relaxed text-slate-200">{card.back}</p>
-          {card.hint && (
-            <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-left">
-              <LightbulbIcon />
-              <span className="text-xs text-amber-300/90">{card.hint}</span>
-            </div>
-          )}
-          <span className="mt-2 text-[10px] text-slate-500">Click to see front</span>
-        </div>
-      </div>
+  return (
+    <div className="relative inline-flex items-center justify-center">
+      <svg width={size} height={size} className="transform -rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="rgba(255, 255, 255, 0.08)"
+          strokeWidth={strokeWidth}
+          fill="transparent"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="url(#gradientRing)"
+          strokeWidth={strokeWidth}
+          fill="transparent"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className="transition-all duration-500 ease-out"
+        />
+        <defs>
+          <linearGradient id="gradientRing" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#8B5CF6" />
+            <stop offset="100%" stopColor="#3B82F6" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <span className="absolute font-mono-numbers text-[11px] font-bold text-white">
+        {Math.round(value)}%
+      </span>
     </div>
   )
 }
 
-/* ── Toolbar Button ─────────────────────────────────────── */
-function ToolbarBtn({ onClick, disabled, children, title }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs font-medium text-slate-300 transition hover:border-teal-500/50 hover:bg-teal-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      {children}
-    </button>
-  )
-}
-
-/* ── Progress Dots ──────────────────────────────────────── */
-function ProgressDots({ indices, current, statuses }) {
-  const total = indices.length
-  const MAX_DOTS = 15
-  if (total <= MAX_DOTS) {
-    return (
-      <div className="flex items-center gap-1">
-        {indices.map((cardIndex, i) => (
-          <div
-            key={cardIndex}
-            className={`rounded-full transition-all duration-200 ${
-              i === current
-                ? 'size-2 bg-teal-400'
-                : statuses[cardIndex] === 'known'
-                ? 'size-1.5 bg-emerald-400'
-                : statuses[cardIndex] === 'learning'
-                ? 'size-1.5 bg-amber-400'
-                : 'size-1.5 bg-slate-700'
-            }`}
-          />
-        ))}
-      </div>
-    )
-  }
-  return (
-    <span className="text-xs text-slate-400">
-      {current + 1} / {total}
-    </span>
-  )
-}
-
-/* ── FlashcardsWorkspace ────────────────────────────────── */
+/* ── Main FlashcardsWorkspace Component ─────────────────────────── */
 export default function FlashcardsWorkspace({
-  documents = [],
   flashcardData,
-  onFlashcardsUpdate,
-  threadId,
   flashcardPrefill,
+  onFlashcardsUpdate,
+  documents = [],
+  threadId,
 }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [genError, setGenError] = useState('')
-  const [cardStatuses, setCardStatuses] = useState({})
-  const [visibleCardIndices, setVisibleCardIndices] = useState([])
-  const hasReportedRef = useRef(false)
+  const [error, setError] = useState('')
+  const [showSetupForm, setShowSetupForm] = useState(false)
+  const [localDeck, setLocalDeck] = useState(flashcardData)
 
-  const cards = flashcardData?.cards ?? []
-  const allIndices = cards.map((_, index) => index)
-  const activeIndices = visibleCardIndices.length > 0 ? visibleCardIndices : allIndices
-  const total = activeIndices.length
-  const currentCardIndex = activeIndices[currentIndex]
-  const currentCard = currentCardIndex == null ? null : cards[currentCardIndex]
+  // Gamification stats
+  const [xp, setXp] = useState(150)
+  const [cardRatings, setCardRatings] = useState({})
+  const [direction, setDirection] = useState(0) // -1 for left, 1 for right
 
-  /* Reset position when new deck arrives */
-  const handleNewDeck = useCallback((data) => {
-    setCurrentIndex(0)
-    setIsFlipped(false)
-    setCardStatuses({})
-    setVisibleCardIndices([])
-    hasReportedRef.current = false
-    if (onFlashcardsUpdate) onFlashcardsUpdate(data)
-  }, [onFlashcardsUpdate])
+  // Mouse Parallax Motion Values
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const rotateX = useTransform(y, [-100, 100], [8, -8])
+  const rotateY = useTransform(x, [-100, 100], [-8, 8])
 
-  /* Navigate cards */
-  function goNext() {
-    setIsFlipped(false)
-    setTimeout(() => setCurrentIndex((i) => Math.min(total - 1, i + 1)), 150)
+  function handleMouseMove(event) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    x.set(event.clientX - centerX)
+    y.set(event.clientY - centerY)
   }
 
-  function goPrev() {
-    setIsFlipped(false)
-    setTimeout(() => setCurrentIndex((i) => Math.max(0, i - 1)), 150)
+  function handleMouseLeave() {
+    x.set(0)
+    y.set(0)
   }
 
-  function flipCard() {
-    setIsFlipped((f) => !f)
-  }
-
-  function assessCurrentCard(status) {
-    if (currentCardIndex == null) return
-    setCardStatuses((current) => ({ ...current, [currentCardIndex]: status }))
-    setIsFlipped(false)
-    if (currentIndex < total - 1) setTimeout(() => setCurrentIndex((index) => index + 1), 150)
-    else if (!hasReportedRef.current && flashcardData) {
-      hasReportedRef.current = true
-      const nextStatuses = { ...cardStatuses, [currentCardIndex]: status }
-      const reportedCards = cards.flatMap((card, index) => nextStatuses[index] ? [{ front: card.front, status: nextStatuses[index] }] : [])
-      void reportFlashcardResult(flashcardData.document_id, flashcardData.topic, reportedCards).catch(() => {})
+  useEffect(() => {
+    if (flashcardData) {
+      setLocalDeck(flashcardData)
+      setCardRatings({})
+      setCurrentIndex(0)
+      setIsFlipped(false)
     }
-  }
+  }, [flashcardData])
 
-  function reviewLearningCards() {
-    setVisibleCardIndices(allIndices.filter((index) => cardStatuses[index] === 'learning'))
-    setCurrentIndex(0)
-    setIsFlipped(false)
-  }
+  const activeDeck = localDeck || flashcardData
+  const cards = Array.isArray(activeDeck?.cards)
+    ? activeDeck.cards
+    : Array.isArray(activeDeck?.flashcards)
+    ? activeDeck.flashcards
+    : []
+  const hasCards = cards.length > 0
+  const currentCard = cards[currentIndex] ?? cards[0]
 
-  function reportSession() {
-    if (!flashcardData || hasReportedRef.current) return
-    hasReportedRef.current = true
-    const reportedCards = cards.flatMap((card, index) => cardStatuses[index] ? [{ front: card.front, status: cardStatuses[index] }] : [])
-    void reportFlashcardResult(flashcardData.document_id, flashcardData.topic, reportedCards).catch(() => {})
-  }
+  // Calculate unique rating stats
+  const gotItCount = Object.values(cardRatings).filter((r) => r === 'got_it').length
+  const needReviewCount = Object.values(cardRatings).filter((r) => r === 'need_review').length
+  const stillLearningCount = Object.values(cardRatings).filter((r) => r === 'still_learning').length
+  const totalRated = Object.keys(cardRatings).length
+  const completionPercentage = hasCards ? (totalRated / cards.length) * 100 : 0
 
-  /* Direct regenerate */
-  async function handleRegenerate() {
-    if (!flashcardData || isGenerating) return
-    reportSession(); setIsGenerating(true)
-    setGenError('')
-    try {
-      const refreshed = await generateFlashcards(
-        flashcardData.document_id,
-        flashcardData.topic,
-        total || 10
-      )
-      handleNewDeck(refreshed)
-    } catch (err) {
-      setGenError(err.message ?? 'Failed to regenerate flashcards.')
-    } finally {
-      setIsGenerating(false)
+  // Trigger confetti when deck is fully completed
+  useEffect(() => {
+    if (hasCards && totalRated === cards.length && cards.length > 0) {
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#8B5CF6', '#3B82F6', '#10B981'],
+      })
     }
-  }
+  }, [totalRated, hasCards, cards.length])
 
-  /* New deck from setup form */
-  async function handleSetupSubmit({ documentId, topic, numCards }) {
+  const handleNext = useCallback(() => {
+    if (!hasCards) return
+    setDirection(1)
+    setIsFlipped(false)
+    setCurrentIndex((prev) => (prev + 1) % cards.length)
+  }, [hasCards, cards.length])
+
+  const handlePrev = useCallback(() => {
+    if (!hasCards) return
+    setDirection(-1)
+    setIsFlipped(false)
+    setCurrentIndex((prev) => (prev - 1 + cards.length) % cards.length)
+  }, [hasCards, cards.length])
+
+  const handleFlip = useCallback(() => {
+    setIsFlipped((prev) => !prev)
+  }, [])
+
+  // Single card evaluation handler
+  const handleRateCard = useCallback(
+    (rating) => {
+      if (!currentCard || !activeDeck) return
+
+      const term = currentCard.term ?? currentCard.front ?? currentCard.question ?? ''
+      const topic = activeDeck.topic ?? 'General Study'
+      const isMastered = rating === 'got_it'
+
+      if (isMastered && cardRatings[currentIndex] !== 'got_it') {
+        setXp((prev) => prev + 50)
+      }
+
+      // Log progress to backend
+      const docId = activeDeck?.document_id || (documents[0]?.id ?? '')
+      const cardStatus = isMastered ? 'known' : 'learning'
+      if (docId) {
+        void reportFlashcardResult(docId, topic, [{ front: term, status: cardStatus }]).catch(() => {})
+      }
+
+      setCardRatings((prev) => ({
+        ...prev,
+        [currentIndex]: rating,
+      }))
+
+      setIsFlipped(false)
+      if (cards.length > 1) {
+        setDirection(1)
+        setCurrentIndex((prev) => (prev + 1) % cards.length)
+      }
+    },
+    [currentCard, activeDeck, currentIndex, cards.length, cardRatings]
+  )
+
+  // Keyboard navigation
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (showSetupForm || !hasCards) return
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        return
+      }
+
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        handleNext()
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        handlePrev()
+      } else if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault()
+        handleFlip()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showSetupForm, hasCards, handleNext, handlePrev, handleFlip])
+
+  async function handleGenerateForm({ documentId, topic, numCards }) {
     setIsGenerating(true)
-    setGenError('')
+    setError('')
     try {
-      const data = await generateFlashcards(documentId, topic, numCards)
-      handleNewDeck(data)
+      const result = await generateFlashcards(documentId, topic, numCards)
+      setLocalDeck(result)
+      setCardRatings({})
+      setCurrentIndex(0)
+      setIsFlipped(false)
+      setShowSetupForm(false)
+      if (onFlashcardsUpdate) onFlashcardsUpdate(result)
     } catch (err) {
-      setGenError(err.message ?? 'Failed to generate flashcards.')
+      setError(err.message || 'Failed to generate flashcards.')
     } finally {
       setIsGenerating(false)
     }
   }
 
-  /* ── Empty / Setup state ──────────────────────────────── */
-  if (!flashcardData) {
+  // Setup Form View
+  if (!activeDeck || !hasCards || showSetupForm) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="space-y-4 max-w-xl mx-auto p-4 animate-fade-in font-sans">
+        {showSetupForm && activeDeck && (
+          <button
+            type="button"
+            onClick={() => setShowSetupForm(false)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:text-white transition-colors mb-2"
+          >
+            <ChevronLeftIcon />
+            <span>Back to current deck</span>
+          </button>
+        )}
+
+        {error && (
+          <p className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
+            {error}
+          </p>
+        )}
+
         <FlashcardsSetupForm
           documents={documents}
           isGenerating={isGenerating}
-          onSubmit={handleSetupSubmit}
+          onSubmit={handleGenerateForm}
           flashcardPrefill={flashcardPrefill}
         />
-        {genError && (
-          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-            {genError}
-          </p>
-        )}
-        <div className="rounded-xl border border-slate-800/60 bg-slate-900/30 p-3 text-center text-xs text-slate-500">
-          Or ask in chat: <span className="font-medium text-teal-400">"Make flashcards on [topic]"</span>
-        </div>
       </div>
     )
   }
 
-  /* ── Active Deck ──────────────────────────────────────── */
-  const progress = total > 0 ? Math.round(((currentIndex + 1) / total) * 100) : 0
+  const topicName = activeDeck.topic ?? 'Study Deck'
+  const cardTag = currentCard?.tag ?? currentCard?.category ?? 'Concept'
+  const termText = currentCard?.front ?? currentCard?.term ?? currentCard?.question ?? ''
+  const definitionText = currentCard?.back ?? currentCard?.definition ?? currentCard?.answer ?? ''
+  const difficulty = currentCard?.difficulty ?? activeDeck.difficulty ?? 'medium'
+  const exampleText = currentCard?.example ?? currentCard?.examples ?? null
+  const hintText = currentCard?.hint ?? currentCard?.memory_trick ?? null
+  const formulaText = currentCard?.formula ?? null
 
   return (
-    <div className="flex flex-col gap-4 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-bold text-white">{flashcardData.topic}</h2>
-            <p className="truncate text-xs text-slate-500">
-              {documents.find((d) => d.id === flashcardData.document_id)?.filename ?? 'Uploaded document'} · {total} cards
-            </p>
+    <div className="flex flex-col items-center gap-6 p-6 max-w-3xl mx-auto animate-fade-in text-[var(--text-primary)] font-sans">
+      {/* ── Gamification Header Bar ───────────────────────────────── */}
+      <div className="w-full max-w-[520px] rounded-3xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl shadow-xl space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CircularProgress value={completionPercentage} size={44} strokeWidth={4} />
+            <div>
+              <h2 className="text-base font-bold text-white capitalize truncate max-w-[200px]">
+                {topicName}
+              </h2>
+              <p className="text-[11px] text-[var(--text-muted)] font-medium">
+                {totalRated} of {cards.length} cards reviewed
+              </p>
+            </div>
           </div>
 
-          {/* Toolbar */}
-          <div className="flex shrink-0 items-center gap-1.5">
-            <ToolbarBtn
-              onClick={handleRegenerate}
-              disabled={isGenerating}
-              title="Regenerate same topic"
+          <div className="flex items-center gap-2">
+            {/* XP Badge */}
+            <span className="flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-mono-numbers font-bold text-amber-300">
+              ⚡ {xp} XP
+            </span>
+            {/* Streak Badge */}
+            <span className="hidden sm:flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-mono-numbers font-bold text-violet-300">
+              🔥 3 Day Streak
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowSetupForm(true)}
+              className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:border-white/20 hover:text-white transition"
+              title="New Flashcard Deck"
             >
-              <RefreshIcon />
-              Regenerate
-            </ToolbarBtn>
-            <ToolbarBtn
-              onClick={() => { reportSession(); onFlashcardsUpdate && onFlashcardsUpdate(null) }}
-              title="Start new deck"
-            >
-              <PlusCircleIcon />
-              + New
-            </ToolbarBtn>
+              <PlusIcon />
+              <span>New</span>
+            </button>
           </div>
-        </div>
-
-        {/* Progress bar */}
-        <div className="h-1 w-full rounded-full bg-slate-800">
-          <div
-            className="h-1 rounded-full bg-gradient-to-r from-teal-500 to-cyan-400 transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
         </div>
       </div>
 
-      {/* Error */}
-      {genError && (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-          {genError}
-        </p>
-      )}
+      {/* ── Flanking Buttons & Interactive 3D Card ─────────────────── */}
+      <div className="flex items-center justify-center gap-4 w-full">
+        {/* Prev Button */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          type="button"
+          onClick={handlePrev}
+          className="grid size-11 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:bg-white/[0.08] hover:text-white shrink-0 focus-visible shadow-lg"
+          aria-label="Previous card"
+        >
+          <ChevronLeftIcon />
+        </motion.button>
 
-      {/* Generating spinner overlay */}
-      {isGenerating && (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-teal-500/20 bg-teal-500/5 py-4 text-xs text-teal-300">
-          <span className="size-4 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
-          Generating flashcards…
-        </div>
-      )}
-
-      {/* Card display */}
-      {!isGenerating && currentCard && (
-        <>
-          <FlashCard card={currentCard} isFlipped={isFlipped} onFlip={flipCard} />
-
-          {isFlipped && (
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => assessCurrentCard('known')} className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20">Got it</button>
-              <button type="button" onClick={() => assessCurrentCard('learning')} className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/20">Still learning</button>
-            </div>
-          )}
-
-          {/* Navigation */}
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={goPrev}
-              disabled={currentIndex === 0}
-              className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 transition hover:border-teal-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+        {/* Card Motion Slide Container */}
+        <div className="w-full max-w-[520px]">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentIndex}
+              initial={{ opacity: 0, x: direction * 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: direction * -40 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="w-full"
             >
-              <ChevronLeftIcon />
-              Prev
-            </button>
+              {/* 3D Flip Card Outer Container */}
+              <div
+                className={`flip-outer ${isFlipped ? 'flipped' : ''}`}
+                onClick={handleFlip}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFlip()}
+              >
+                <div className="flip-inner">
+                  {/* ── Front Face ──────────────────────────────────────── */}
+                  <div className="face flex flex-col justify-between p-6">
+                    <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-3">
+                      <IndexTab variant="accent">{cardTag}</IndexTab>
+                      <span className="text-[10px] font-mono-numbers font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-white/10 bg-white/5 text-[var(--text-secondary)]">
+                        {difficulty}
+                      </span>
+                    </div>
 
-            <ProgressDots indices={activeIndices} current={currentIndex} statuses={cardStatuses} />
 
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={currentIndex === total - 1}
-              className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 transition hover:border-teal-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              Next
-              <ChevronRightIcon />
-            </button>
-          </div>
+                    <div className="my-auto py-4 space-y-3 text-center">
+                      <p className="text-xl font-bold leading-relaxed text-white tracking-tight">
+                        {termText}
+                      </p>
+                      {exampleText && (
+                        <p className="text-xs text-[var(--text-secondary)] italic max-w-md mx-auto">
+                          e.g. {exampleText}
+                        </p>
+                      )}
+                    </div>
 
-          {/* Keyboard hint */}
-          <p className="text-center text-[10px] text-slate-600">
-            Click card to flip · navigate with Prev / Next
-          </p>
-        </>
-      )}
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-[var(--text-muted)] pt-3 border-t border-white/5">
+                      <FlipIcon />
+                      <span>Tap to reveal answer</span>
+                    </div>
+                  </div>
 
-      {/* Empty state (no cards returned) */}
-      {!isGenerating && total === 0 && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 py-10 text-center">
-          <p className="text-sm text-slate-500">No cards were generated. Try a different topic.</p>
+                  {/* ── Back Face ───────────────────────────────────────── */}
+                  <div className="face face-back flex flex-col justify-between p-6">
+                    <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-3">
+                      <IndexTab variant="warning">Detailed Answer</IndexTab>
+                      <span className="font-mono-numbers text-xs text-[var(--accent)] font-semibold">
+                        Card {currentIndex + 1}/{cards.length}
+                      </span>
+                    </div>
+
+                    <div className="my-auto py-3 overflow-y-auto max-h-[200px] space-y-3 pr-1">
+                      <p className="text-sm leading-relaxed text-[var(--text-primary)]">
+                        {definitionText}
+                      </p>
+                      {formulaText && (
+                        <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-2.5 text-xs font-mono-numbers text-blue-300">
+                          Formula: {formulaText}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-[var(--text-muted)] pt-3 border-t border-white/5">
+                      <FlipIcon />
+                      <span>Tap to flip back</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
-      )}
+
+        {/* Next Button */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          type="button"
+          onClick={handleNext}
+          className="grid size-11 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:bg-white/[0.08] hover:text-white shrink-0 focus-visible shadow-lg"
+          aria-label="Next card"
+        >
+          <ChevronRightIcon />
+        </motion.button>
+      </div>
+
+      {/* ── 3 Interactive Recall Action Buttons ───────────────────── */}
+      <div className="grid grid-cols-3 gap-3 w-full max-w-[520px]">
+        <motion.button
+          whileHover={{ scale: 1.03, y: -1 }}
+          whileTap={{ scale: 0.96 }}
+          type="button"
+          onClick={() => handleRateCard('still_learning')}
+          className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-xs font-bold transition-all shadow-md focus-visible ${
+            cardRatings[currentIndex] === 'still_learning'
+              ? 'border-[var(--warning)] bg-[var(--warning-soft)] text-[var(--warning)] ring-2 ring-[var(--warning)]/50'
+              : 'border-[var(--warning)]/30 bg-[#141420] text-[var(--warning)] hover:bg-[var(--warning-soft)]'
+          }`}
+        >
+          <ClockIcon />
+          <span>Still Learning</span>
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.03, y: -1 }}
+          whileTap={{ scale: 0.96 }}
+          type="button"
+          onClick={() => handleRateCard('need_review')}
+          className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-xs font-bold transition-all shadow-md focus-visible ${
+            cardRatings[currentIndex] === 'need_review'
+              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)] ring-2 ring-[var(--accent)]/50'
+              : 'border-[var(--accent)]/30 bg-[#141420] text-[var(--accent)] hover:bg-[var(--accent-soft)]'
+          }`}
+        >
+          <RefreshCwIcon />
+          <span>Need Review</span>
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.03, y: -1 }}
+          whileTap={{ scale: 0.96 }}
+          type="button"
+          onClick={() => handleRateCard('got_it')}
+          className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-xs font-bold transition-all shadow-md focus-visible ${
+            cardRatings[currentIndex] === 'got_it'
+              ? 'border-[var(--success)] bg-[var(--success-soft)] text-[var(--success)] ring-2 ring-[var(--success)]/50'
+              : 'border-[var(--success)]/30 bg-[#141420] text-[var(--success)] hover:bg-[var(--success-soft)]'
+          }`}
+        >
+          <CheckIcon />
+          <span>Got It</span>
+        </motion.button>
+      </div>
+
+      {/* ── Footer Stats ──────────────────────────────────────────── */}
+      <div className="flex items-center justify-center gap-6 text-xs text-[var(--text-muted)] font-mono-numbers">
+        <span className="flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-[var(--success)]" />
+          <span>{gotItCount} Mastered</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-[var(--accent)]" />
+          <span>{needReviewCount} Need Review</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-[var(--warning)]" />
+          <span>{stillLearningCount} Still Learning</span>
+        </span>
+      </div>
     </div>
   )
 }
