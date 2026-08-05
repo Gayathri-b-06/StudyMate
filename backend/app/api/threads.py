@@ -51,8 +51,9 @@ def list_threads(
     return [_thread_response(thread) for thread in thread_service.list_threads(db)]
 
 
-@router.get("/{thread_id}/messages", response_model=list[ThreadChatMessage])
+@router.get("/{thread_id}/messages", response_model=list[ThreadChatMessage], response_model_exclude_none=True)
 def get_thread_messages(
+
     thread_id: str,
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
     db: Annotated[Session, Depends(get_db)],

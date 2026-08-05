@@ -7,3 +7,8 @@ export function reportQuizResult(documentId, topic, results) {
 export function reportFlashcardResult(documentId, topic, cards) {
   return request('/progress/flashcard-result', { method: 'POST', body: JSON.stringify({ document_id: documentId, topic, cards }) })
 }
+
+export function getStudyProgress() {
+  return request('/progress')
+}
+

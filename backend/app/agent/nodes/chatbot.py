@@ -30,11 +30,16 @@ from langchain_core.tools import BaseTool
 
 from app.agent.prompts import (
     CHATBOT_SYSTEM_PROMPT,
+    FLASHCARD_RESULT_SYSTEM_PROMPT,
+    GENERAL_CHAT_SYSTEM_PROMPT,
     GROUNDED_ANSWER_SYSTEM_PROMPT,
     QUIZ_RESULT_SYSTEM_PROMPT,
+    STUDY_PLAN_RESULT_SYSTEM_PROMPT,
     STUDY_PROGRESS_RESULT_SYSTEM_PROMPT,
     with_memory_context,
 )
+
+
 from app.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -288,11 +293,12 @@ def create_progress_node(llm: BaseChatModel, progress_tool: BaseTool | None) -> 
 _SYNTHESIS_PROMPT_MAP: dict[str, str] = {
     "quiz"        : QUIZ_RESULT_SYSTEM_PROMPT,
     "progress"    : STUDY_PROGRESS_RESULT_SYSTEM_PROMPT,
-    "flashcard"   : QUIZ_RESULT_SYSTEM_PROMPT,   # re-uses quiz result style
-    "study_plan"  : QUIZ_RESULT_SYSTEM_PROMPT,   # brief "your plan is ready" style
+    "flashcard"   : FLASHCARD_RESULT_SYSTEM_PROMPT,
+    "study_plan"  : STUDY_PLAN_RESULT_SYSTEM_PROMPT,
     "document_qa" : GROUNDED_ANSWER_SYSTEM_PROMPT,
-    "general_chat": CHATBOT_SYSTEM_PROMPT,
+    "general_chat": GENERAL_CHAT_SYSTEM_PROMPT,
 }
+
 
 
 def create_synthesis_node(llm: BaseChatModel) -> ChatbotNode:
@@ -315,7 +321,9 @@ def create_synthesis_node(llm: BaseChatModel) -> ChatbotNode:
         )
         return {"messages": [response]}
 
+
     return synthesis
+
 
 
 

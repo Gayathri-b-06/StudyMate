@@ -30,20 +30,29 @@ export default function FlashcardsSetupForm({ documents = [], isGenerating = fal
   const [topic, setTopic] = useState('')
   const [numCards, setNumCards] = useState(10)
   const [selectedDocId, setSelectedDocId] = useState(documents[0]?.id ?? '')
+
   useEffect(() => {
     if (!flashcardPrefill) return
     setSelectedDocId(flashcardPrefill.documentId ?? '')
     setTopic(flashcardPrefill.topic ?? '')
   }, [flashcardPrefill])
 
-  const effectiveDocId = selectedDocId || (documents[0]?.id ?? '')
+  // Keep selectedDocId valid when documents prop updates
+  useEffect(() => {
+    if (documents.length > 0 && (!selectedDocId || (selectedDocId !== 'all' && !documents.some((d) => d.id === selectedDocId)))) {
+      setSelectedDocId(documents.length > 1 ? 'all' : documents[0].id)
+    }
+  }, [documents, selectedDocId])
+
+  const effectiveDocId = selectedDocId || (documents.length > 1 ? 'all' : (documents[0]?.id ?? ''))
   const hasDocuments = documents.length > 0
 
   function handleSubmit(e) {
     e.preventDefault()
     if (!topic.trim() || isGenerating || !hasDocuments) return
+    const actualDocId = effectiveDocId === 'all' ? documents[0]?.id : effectiveDocId
     if (onSubmit) {
-      onSubmit({ documentId: effectiveDocId, topic: topic.trim(), numCards })
+      onSubmit({ documentId: actualDocId, topic: topic.trim(), numCards })
     }
   }
 
@@ -64,9 +73,11 @@ export default function FlashcardsSetupForm({ documents = [], isGenerating = fal
       <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         {/* Document Selection */}
         <div>
-          <label htmlFor="fc-document-select" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Source Document
-          </label>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label htmlFor="fc-document-select" className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Source Document ({documents.length} Uploaded)
+            </label>
+          </div>
           {!hasDocuments ? (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
               ⚠️ Please upload a PDF in the <strong>Documents</strong> tab first before generating flashcards.
@@ -78,6 +89,11 @@ export default function FlashcardsSetupForm({ documents = [], isGenerating = fal
               onChange={(e) => setSelectedDocId(e.target.value)}
               className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none transition focus:border-teal-400/70"
             >
+              {documents.length > 1 && (
+                <option value="all">
+                  📚 All Thread PDFs ({documents.length} Files Combined)
+                </option>
+              )}
               {documents.map((doc) => (
                 <option key={doc.id} value={doc.id}>
                   📄 {doc.filename}

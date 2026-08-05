@@ -192,10 +192,42 @@ class ChatService:
 
         tool_results: list[Any] = []
         tool_names_used: list[str] = []
-        for message in messages:
+
+        # Scope tool results and sse event discovery to the current turn's messages
+        last_human_index = -1
+        for index in range(len(messages) - 1, -1, -1):
+            if isinstance(messages[index], HumanMessage):
+                last_human_index = index
+                break
+
+        current_turn_messages = (
+            messages[last_human_index:] if last_human_index != -1 else messages
+        )
+
+        for message in current_turn_messages:
             if not isinstance(message, ToolMessage):
                 continue
             tool_names_used.append(message.name or "")
+            if message.name == "get_study_progress":
+                try:
+                    raw_content = message.content
+                    if isinstance(raw_content, str):
+                        data = json.loads(raw_content)
+                    elif isinstance(raw_content, dict):
+                        data = raw_content
+                    else:
+                        data = {}
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool": "progress",
+                        "quiz_attempts": data.get("quiz_attempts", []),
+                        "weak_topics": data.get("weak_topics", []),
+                        "studied_topics": data.get("studied_topics", []),
+                    })
+                except Exception:
+                    continue
+                continue
+
             if message.name not in ("generate_document_quiz", "generate_document_flashcards", "generate_document_study_plan"):
                 continue
             artifact = getattr(message, "artifact", None)
@@ -217,8 +249,10 @@ class ChatService:
                     except ValueError:
                         continue
 
-        # Build post-hoc SSE events from intent + observed tool messages
+
+        # Build post-hoc SSE events from intent + observed tool messages in current turn
         sse_events = _build_sse_events(intent, tool_names_used)
+
 
         citations = (
             extract_citations_from_messages(messages, assistant_response)
@@ -462,13 +496,29 @@ class ChatService:
                         if recent_tool_messages
                         else []
                     )
+                    progress_data = None
+                    for tm in recent_tool_messages:
+                        if tm.name == "get_study_progress":
+                            try:
+                                raw = tm.content
+                                data = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+                                progress_data = {
+                                    "tool": "progress",
+                                    "quiz_attempts": data.get("quiz_attempts", []),
+                                    "weak_topics": data.get("weak_topics", []),
+                                    "studied_topics": data.get("studied_topics", []),
+                                }
+                            except Exception:
+                                pass
                     history.append(
                         ThreadChatMessage(
                             role="assistant",
                             content=strip_citation_markers(content),
                             sources=citations,
+                            progress_data=progress_data,
                         )
                     )
                     recent_tool_messages = []
+
 
         return history

@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Ensure .env is loaded before any LangChain/LangGraph modules are imported
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(_BACKEND_DIR / ".env", override=True)
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+
 
 from app.agent.checkpointer import close_checkpointer, create_checkpointer
 from app.agent.graph import create_graph

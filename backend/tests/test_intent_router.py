@@ -69,6 +69,11 @@ def _cls(text: str) -> Intent:
     "Who are you",
     "Nice to meet you",
     "How are you",
+    "just want to chat",
+    "want to chat",
+    "can we talk",
+    "what are your thoughts on data centres consuming water ?",
+    "what do you think about AI?",
 ])
 def test_general_chat(query: str):
     assert _cls(query) == Intent.GENERAL_CHAT, f"Expected GENERAL_CHAT for: {query!r}"

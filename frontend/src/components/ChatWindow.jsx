@@ -1,42 +1,42 @@
 import { useEffect, useRef, useState } from 'react'
 import { getThreadMessages } from '../api/client'
 import { sendChatMessageStream } from '../lib/api'
+import { useWorkspace } from '../context/WorkspaceContext'
 import ToolStatusIndicator from './ToolStatusIndicator'
+import MarkdownMessage from './MarkdownMessage'
+import CitationBadges from './CitationBadges'
+import WeakTopicsCard from './WeakTopicsCard'
 
-/* ── Simple inline markdown renderer ────────────────────── */
-function MarkdownContent({ text }) {
-  const parts = text.split(/(```[\s\S]*?```|`[^`]+`|\*\*[^*]+\*\*)/g)
 
-  return (
-    <span>
-      {parts.map((part, i) => {
-        if (part.startsWith('```') && part.endsWith('```')) {
-          const code = part.slice(3, -3).replace(/^[a-z]+\n/, '')
-          return (
-            <pre key={i} className="mt-2 mb-2 overflow-x-auto rounded-lg bg-slate-950/80 px-3 py-2 font-mono text-xs leading-5 text-emerald-300">
-              {code}
-            </pre>
-          )
-        }
-        if (part.startsWith('`') && part.endsWith('`')) {
-          return (
-            <code key={i} className="rounded bg-slate-950/60 px-1.5 py-0.5 font-mono text-xs text-emerald-300">
-              {part.slice(1, -1)}
-            </code>
-          )
-        }
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="font-semibold text-white">{part.slice(2, -2)}</strong>
-        }
-        return part.split('\n').map((line, j, arr) => (
-          <span key={`${i}-${j}`}>
-            {line}
-            {j < arr.length - 1 && <br />}
-          </span>
-        ))
-      })}
-    </span>
-  )
+/**
+ * Extracts Markdown body content separate from trailing Sources section.
+ * Parses any inline text citations like "sample.pdf, p. 18" or "sample.pdf (page 18)".
+ */
+function parseBodyAndSources(rawContent = '') {
+  if (!rawContent) return { body: '', parsedSources: [] }
+
+  const sourcesPattern = /(?:^|\n)(?:##\s*(?:📚\s*)?Sources|\*\*Sources:\*\*|Sources:)([\s\S]*)$/i
+  const match = rawContent.match(sourcesPattern)
+
+  if (!match) {
+    return { body: rawContent, parsedSources: [] }
+  }
+
+  const body = rawContent.slice(0, match.index).trim()
+  const sourcesText = match[1] ?? ''
+  const parsedSources = []
+
+  const regex = /(?:📄\s*)?([a-zA-Z0-9_\-.]+\.pdf)(?:[^\n\d]*?(\d+))?/gi
+  let m
+  while ((m = regex.exec(sourcesText)) !== null) {
+    const doc = m[1]?.trim()
+    const page = m[2] ? parseInt(m[2], 10) : null
+    if (doc) {
+      parsedSources.push({ document: doc, page })
+    }
+  }
+
+  return { body, parsedSources }
 }
 
 /* ── Typing indicator dots ──────────────────────────────── */
@@ -94,11 +94,16 @@ function ChatWindow({
   onPlanCreated,
   onInvalidThread,
   onQuizCreated,
+  onProgressResult,
+  onOpenProgressTab,
+  onQuizTopic,
   onResponse,
   onThreadCreated,
   resetKey,
   threadId,
 }) {
+  const { activeWorkspace, setActiveWorkspace } = useWorkspace()
+
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -109,23 +114,20 @@ function ChatWindow({
   const pendingToolStatusRef = useRef(null)
   const createdThreadIdRef = useRef(null)
 
-  /* Fetch history whenever threadId or resetKey changes */
+  /* Fetch history whenever threadId, resetKey, or activeWorkspace changes */
   useEffect(() => {
+    if (activeWorkspace && activeWorkspace !== 'chat') {
+      return
+    }
+
     setDraft('')
     setError('')
     pendingToolStatusRef.current = null
-
-    // If this thread was just created in-flight by the current component instance,
-    // local state already has the full message stream. Skip refetching/wiping.
-    if (createdThreadIdRef.current && createdThreadIdRef.current === threadId) {
-      return
-    }
     createdThreadIdRef.current = null
 
-    setMessages([])
-
-    if (!threadId) {
+    if (!threadId || threadId === 'undefined') {
       setIsLoadingHistory(false)
+      setMessages([])
       return
     }
 
@@ -152,7 +154,9 @@ function ChatWindow({
     return () => {
       isCurrent = false
     }
-  }, [threadId, resetKey, onInvalidThread])
+  }, [threadId, resetKey, activeWorkspace, onInvalidThread])
+
+
 
   /* Auto-scroll */
   useEffect(() => {
@@ -174,34 +178,45 @@ function ChatWindow({
     setDraft('')
     setError('')
     setIsSending(true)
+    pendingToolStatusRef.current = null
     setMessages((prev) => [...prev, { content: message, role: 'user' }])
 
     try {
       await sendChatMessageStream(message, threadId, {
         onToolResult: (toolResult) => {
           if (toolResult && toolResult.tool === 'quiz') {
-            if (import.meta.env.DEV) {
-              console.debug('[StudyMate] quiz tool_result received:', toolResult)
-            }
             pendingToolStatusRef.current = {
               message: '✅ Quiz created',
               detail: toolResult.topic,
             }
             if (onQuizCreated) onQuizCreated(toolResult)
+            setActiveWorkspace('quiz')
           } else if (toolResult && toolResult.tool === 'flashcards') {
             pendingToolStatusRef.current = {
               message: '✅ Flashcards created',
               detail: toolResult.topic,
             }
             if (onFlashcardsCreated) onFlashcardsCreated(toolResult)
-          } else if (toolResult && toolResult.tool === 'study_planner') {
+            setActiveWorkspace('flashcards')
+          } else if (toolResult && (toolResult.tool === 'study_planner' || toolResult.tool === 'notes')) {
             pendingToolStatusRef.current = {
-              message: '✅ Study plan created',
+              message: toolResult.tool === 'notes' ? '✅ Notes generated' : '✅ Study plan created',
               detail: toolResult.topic,
             }
             if (onPlanCreated) onPlanCreated(toolResult)
+            setActiveWorkspace('planner')
+          } else if (toolResult && toolResult.tool === 'progress') {
+            pendingToolStatusRef.current = {
+              message: '📊 Study progress updated',
+              detail: `${toolResult.weak_topics?.length ?? 0} weak topic(s) tracked`,
+              progressData: toolResult,
+            }
+            if (onProgressResult) onProgressResult(toolResult)
+            setActiveWorkspace('progress')
           }
         },
+
+
         onMessage: (response) => {
           const toolStatus = pendingToolStatusRef.current
           pendingToolStatusRef.current = null
@@ -212,6 +227,7 @@ function ChatWindow({
               role: 'assistant',
               sources: response.sources ?? [],
               toolStatus,
+              progressData: toolStatus?.progressData,
             },
           ])
           if (response.thread_id) {
@@ -243,11 +259,10 @@ function ChatWindow({
 
   return (
     <section className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-      {/* ── Independently Scrollable Message List ─────────────── */}
+      {/* ── Scrollable Message List ─────────────── */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-5 py-10">
 
-          {/* Loading history indicator */}
           {isLoadingHistory ? (
             <HistorySkeleton />
           ) : messages.length === 0 ? (
@@ -262,7 +277,6 @@ function ChatWindow({
               <p className="mt-4 max-w-xl text-base leading-7 text-slate-400">
                 Ask a question, upload a PDF, and keep your learning conversations organized in one place.
               </p>
-              {/* Suggestion chips */}
               <div className="mt-8 flex flex-wrap gap-2">
                 {[
                   'Explain this concept simply',
@@ -283,6 +297,8 @@ function ChatWindow({
           ) : (
             <div className="space-y-6">
               {messages.map((message, index) => {
+                const activeProgressData = message.progressData || message.progress_data
+
                 return (
                   <article
                     key={`${message.role}-${index}`}
@@ -302,28 +318,37 @@ function ChatWindow({
                     >
                       {message.role === 'assistant' ? (
                         <>
-                          <MarkdownContent text={message.content} />
-                          {message.toolStatus && (
-                            <div className="mt-3 border-t border-slate-800/80 pt-2">
-                              <ToolStatusIndicator
-                                message={message.toolStatus.message}
-                                detail={message.toolStatus.detail}
-                              />
-                            </div>
-                          )}
-                          {message.sources && message.sources.length > 0 && (
-                            <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-800/80 pt-2 text-[11px] text-slate-400">
-                              <span className="font-semibold text-slate-500">Sources:</span>
-                              {message.sources.map((src, i) => (
-                                <span
-                                  key={i}
-                                  className="inline-flex items-center gap-1 rounded bg-slate-800/80 px-2 py-0.5 font-medium text-violet-300 ring-1 ring-inset ring-violet-400/20"
-                                >
-                                  📄 {src.document}{src.page != null ? `, p. ${src.page}` : ''}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          {/* 1. Header Text / Markdown Message */}
+                          {(() => {
+                            const { body, parsedSources } = parseBodyAndSources(message.content)
+                            return (
+                              <>
+                                <MarkdownMessage content={body} />
+
+                                {/* 2. Weak Topics Card Component */}
+                                {activeProgressData && (
+                                  <WeakTopicsCard
+                                    progressData={activeProgressData}
+                                    onOpenProgressTab={onOpenProgressTab}
+                                  />
+                                )}
+
+
+                                {message.toolStatus && (
+                                  <div className="mt-3 border-t border-slate-800/80 pt-2">
+                                    <ToolStatusIndicator
+                                      message={message.toolStatus.message}
+                                      detail={message.toolStatus.detail}
+                                    />
+                                  </div>
+                                )}
+                                <CitationBadges
+                                  sources={message.sources ?? []}
+                                  parsedSources={parsedSources}
+                                />
+                              </>
+                            )
+                          })()}
                         </>
                       ) : (
                         message.content

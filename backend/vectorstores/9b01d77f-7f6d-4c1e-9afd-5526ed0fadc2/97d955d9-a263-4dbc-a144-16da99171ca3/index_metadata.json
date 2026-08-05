@@ -1,0 +1,13 @@
+{
+  "chunk_count": 1885,
+  "created_at": "2026-08-04T07:19:30.119184+00:00",
+  "embedding_dimension": 1024,
+  "embedding_identifier": "nvidia/nv-embedqa-e5-v5",
+  "index_id": "31ab5fa2c08745fa8e653961674e46c5",
+  "page_count": 387,
+  "schema_version": 1,
+  "source_count": 1,
+  "sources": [
+    "sample.pdf"
+  ]
+}
