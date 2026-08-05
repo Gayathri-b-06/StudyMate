@@ -43,7 +43,7 @@ The application is built using **FastAPI**, **LangGraph**, **React 19**, **Vite*
 - **Structured Performance Tracking**: Displays accuracy percentages, attempted quizzes, and automatically identified weak topics across sessions.
 
 ### 🧠 Backend AI & Architecture
-- **Deterministic Intent Routing**: Pure-Python regex classification that routes queries before LLM tool binding to prevent model function-calling failures.
+- **Deterministic Intent Routing**: Pure-Python regex classification that routes queries before LLM tool binding to prevent model function-calling failures. Supports general conversational chat and general-knowledge discussion queries.
 - **Hybrid RAG Pipeline**: Combines FAISS dense vector search, BM25 lexical keyword matching, and Cross-Encoder reranking (`ms-marco-MiniLM-L-6-v2`).
 - **Single Source of Truth Context**: State management via `WorkspaceContext.jsx` for zero data-loss transitions.
 - **Streaming Responses**: Real-time message streaming over Server-Sent Events (SSE).
@@ -94,7 +94,7 @@ flowchart TD
 | **RAG Pipeline** | FAISS, BM25 (`langchain_community`), Cross-Encoder (`ms-marco-MiniLM-L-6-v2`) |
 | **Database** | SQLite (WAL Mode) via SQLAlchemy 2.0 ORM |
 | **Streaming** | Server-Sent Events (SSE) via `StreamingResponse` |
-| **Testing** | Pytest (161 unit & integration tests) |
+| **Testing** | Pytest (166 unit & integration tests) |
 
 ---
 
@@ -112,7 +112,7 @@ StudyMate/
 │   │   ├── services/    # Business logic services for chat, threads, and documents
 │   │   ├── tools/       # LangChain tools for RAG, memory, quiz, flashcards, and plans
 │   │   └── main.py      # FastAPI application entrypoint and lifespan context
-│   └── tests/           # Pytest unit and regression test suite (161 tests)
+│   └── tests/           # Pytest unit and regression test suite (166 tests)
 ├── frontend/
 │   ├── src/
 │   │   ├── api/         # REST API fetch helpers
@@ -180,7 +180,7 @@ cd backend
 .venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-**Result**: 161 passed (100% success rate).
+**Result**: 166 passed (100% success rate).
 
 To verify the frontend build:
 
