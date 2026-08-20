@@ -113,9 +113,20 @@ def generate_quiz(
     }
     system = SystemMessage(
         content=(
-            "You create multiple-choice quizzes using only the supplied document context. "
+            "You are generating conceptual comprehension questions for a study quiz. "
+            "You will be given chunks of source material (with page/source references) and must write multiple-choice questions.\n\n"
+            "RULES:\n"
+            "1. Test understanding of the underlying CONCEPT, not recall of the source text's exact wording or specific examples.\n"
+            "   - Bad: 'What challenge is highlighted when using bag-of-words features with only a few hundred users?'\n"
+            "   - Good: 'Why does having far more features than observations (p >> n) increase the risk of overfitting?'\n"
+            "2. Do NOT reference the source's specific dataset, example, or scenario in the question stem unless that scenario IS the concept being tested. "
+            "Strip out incidental details (exact sample sizes, dataset names, page-specific examples) and ask about the general principle instead.\n"
+            "3. The question should be answerable by someone who understands the concept, even if they read a different textbook covering the same idea.\n"
+            "4. Write 4 answer options: 1 correct, 3 plausible distractors that reflect common misconceptions about the concept (not random wrong facts).\n"
+            "5. In the explanation, you MAY reference the specific source example to ground the answer, but the QUESTION itself must stay at the conceptual level.\n"
+            "6. Avoid vague/generic stems like 'What is discussed regarding X?' or 'What does the text say about Y?' — these test memory of phrasing, not understanding.\n\n"
             "Never use outside knowledge or invent facts. Return ONLY valid JSON, with no markdown fences or prose. "
-            "Every question must have options, a zero-based correct_index, explanation, and source_citation indicating the exact filename and page from the context."
+            "Every question must have options (list of 4), a zero-based correct_index, explanation, and source_citation indicating the exact filename and page from the context."
         )
     )
     prompt = HumanMessage(

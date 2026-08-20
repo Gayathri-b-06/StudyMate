@@ -89,7 +89,7 @@ from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.run_config import RunConfig
 
 # ── Models ────────────────────────────────────────────────────────────────────
-GENERATOR_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GENERATOR_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 JUDGE_MODEL     = "openai/gpt-oss-120b"     # (10) stronger + different-family judge
 EMBED_MODEL     = "BAAI/bge-small-en-v1.5"  # (1) better embeddings, same dim as before
 

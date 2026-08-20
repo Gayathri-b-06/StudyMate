@@ -49,7 +49,7 @@ from app.rag.store import build_and_save_index, load_index, load_index_metadata,
 from app.rag.retriever import retrieve
 # ---------------------------------------------------------------------
 
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
 SYSTEM_PROMPT = """
 You are StudyMate, an AI study assistant.
