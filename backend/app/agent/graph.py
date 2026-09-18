@@ -120,7 +120,7 @@ def create_graph(
     quiz_tool     = _get("generate_document_quiz")
     flash_tool    = _get("generate_document_flashcards")
     plan_tool     = _get("generate_document_study_plan")
-    progress_tool = _get("get_study_progress")
+    progress_tool = _get("get_flashcard_learning_status")
 
     # ── Build graph ──────────────────────────────────────────────────────────
     graph = StateGraph(AgentState)

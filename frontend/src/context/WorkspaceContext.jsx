@@ -1,9 +1,11 @@
-import { createContext, useCallback, useContext, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { useAuth } from './AuthContext'
 
 const WorkspaceContext = createContext(null)
 
 export function WorkspaceProvider({ children, value = {} }) {
-  const [activeWorkspace, setActiveWorkspace] = useState('chat')
+  const { user } = useAuth()
+  const [activeWorkspace, setActiveWorkspace] = useState('overview')
   const [activeThreadIdInternal, setActiveThreadIdInternal] = useState(null)
   const [quizPrefill, setQuizPrefill] = useState(null)
   const [flashcardPrefill, setFlashcardPrefill] = useState(null)
@@ -11,6 +13,25 @@ export function WorkspaceProvider({ children, value = {} }) {
   const [quizData, setQuizData] = useState(null)
   const [flashcardData, setFlashcardData] = useState(null)
   const [planData, setPlanData] = useState(null)
+
+  // Space → Project state
+  const [spaces, setSpaces] = useState([])
+  const [activeSpaceId, setActiveSpaceId] = useState(null)
+  const [activeProjectId, setActiveProjectId] = useState(null)
+  const [progressVersion, setProgressVersion] = useState(0)
+
+  const resetWorkspaceState = useCallback(() => {
+    setActiveWorkspace('overview'); setActiveThreadIdInternal(null); setQuizPrefill(null)
+    setFlashcardPrefill(null); setProgressData(null); setQuizData(null); setFlashcardData(null)
+    setPlanData(null); setSpaces([]); setActiveSpaceId(null); setActiveProjectId(null)
+    setProgressVersion((v) => v + 1)
+  }, [])
+
+  useEffect(() => { resetWorkspaceState() }, [user?.id, resetWorkspaceState])
+
+  const refreshProgress = useCallback(() => {
+    setProgressVersion((v) => v + 1)
+  }, [])
 
   const activeThreadId = value?.activeThreadId ?? activeThreadIdInternal
   const setActiveThreadId = value?.setActiveThreadId ?? setActiveThreadIdInternal
@@ -44,6 +65,14 @@ export function WorkspaceProvider({ children, value = {} }) {
   const contextValue = {
     // Merge external value first so internal state is the primary authority
     ...(value || {}),
+    // Space / Project
+    spaces,
+    setSpaces,
+    activeSpaceId,
+    setActiveSpaceId,
+    activeProjectId,
+    setActiveProjectId,
+    // Workspace tabs
     activeWorkspace,
     setActiveWorkspace,
     activeThreadId,
@@ -61,6 +90,9 @@ export function WorkspaceProvider({ children, value = {} }) {
     planData,
     setPlanData,
     handleUsePlanTopic,
+    progressVersion,
+    refreshProgress,
+    resetWorkspaceState,
   }
 
   return (

@@ -14,9 +14,11 @@ from app.agent.graph import create_graph
 from app.api.chat import router as chat_router
 from app.db import crud
 from app.db.models import Base
+from app.db.session import init_db
 from app.rag.retriever import RetrievedChunk
 from app.services.chat_service import ChatService
 from app.tools.quiz_generator_tool import generate_quiz
+from scripts.migrate_spaces_projects import DEFAULT_PROJECT_ID
 
 
 class ToolCapableFakeChatModel(FakeMessagesListChatModel):
@@ -31,7 +33,9 @@ def test_generate_quiz_reuses_retriever_and_logs_event(monkeypatch) -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     db = sessionmaker(bind=engine)()
-    crud.create_thread(db, thread_id="thread-1", title="Quiz thread")
+    space = crud.create_space(db, space_id="space-1", name="Space 1")
+    project = crud.create_project(db, project_id="project-1", space_id=space.id, name="Project 1")
+    crud.create_thread(db, thread_id="thread-1", title="Quiz thread", project_id=project.id)
     document = crud.create_document(
         db,
         document_id="document-1",
@@ -97,11 +101,12 @@ def test_streaming_chat_emits_structured_quiz_tool_result() -> None:
         }]),
         AIMessage(content="Your quiz is ready."),
     ])
+    init_db()
     app = FastAPI()
     app.state.chat_service = ChatService(create_graph(model, tools=[generate_document_quiz]))
     app.include_router(chat_router)
 
-    response = TestClient(app).post("/chat", json={"message": "Quiz me on ATP", "stream": True})
+    response = TestClient(app).post("/chat", json={"message": "Quiz me on ATP", "stream": True, "project_id": DEFAULT_PROJECT_ID})
 
     assert response.status_code == 200
     assert "event: tool_result" in response.text

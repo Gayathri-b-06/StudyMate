@@ -15,9 +15,13 @@ from app.db.models import MemoryFactType
 from app.db.session import SessionLocal
 
 
+from scripts.migrate_spaces_projects import DEFAULT_PROJECT_ID
+
+
 def record_weak_topic(
     db: Session,
     user_id: str,
+    project_id: str,
     topic: str,
     detail: str,
     document_id: str | None = None,
@@ -25,17 +29,32 @@ def record_weak_topic(
 ) -> None:
     """Persist a deterministic weak-topic fact derived by backend rules."""
     crud.save_user_memory(
-        db, user_id, MemoryFactType.WEAK_TOPIC, topic, detail, document_id, reason=reason
+        db, user_id, project_id, MemoryFactType.WEAK_TOPIC, topic, detail, document_id, reason=reason
     )
 
 
 def record_studied_topic(
-    db: Session, user_id: str, topic: str, document_id: str | None
+    db: Session,
+    user_id: str,
+    topic: str,
+    document_id: str | None = None,
+    project_id: str | None = None,
 ) -> None:
     """Persist a factual record that the student generated study material."""
+    resolved_pid = project_id
+    if not resolved_pid and document_id:
+        doc = crud.get_document(db, document_id)
+        if doc and doc.thread_id:
+            thread = crud.get_thread(db, doc.thread_id)
+            if thread and thread.project_id:
+                resolved_pid = thread.project_id
+    if not resolved_pid:
+        resolved_pid = DEFAULT_PROJECT_ID
+
     crud.save_user_memory(
         db,
         user_id,
+        resolved_pid,
         MemoryFactType.STUDIED_TOPIC,
         topic,
         f"Studied {topic}.",
@@ -44,9 +63,9 @@ def record_studied_topic(
     )
 
 
-def get_memory_context(db: Session, user_id: str) -> str:
+def get_memory_context(db: Session, user_id: str, project_id: str) -> str:
     """Return a short prompt fragment for a fresh conversation, never a transcript."""
-    facts = crud.get_user_memory(db, user_id, limit=8)
+    facts = crud.get_user_memory(db, user_id, project_id, limit=8)
     weak = [
         fact.topic
         for fact in facts
@@ -67,11 +86,11 @@ def get_memory_context(db: Session, user_id: str) -> str:
     return " ".join(parts)
 
 
-def get_default_memory_context() -> str:
-    """Load the temporary single-user context from a short-lived DB session."""
+def get_default_memory_context(project_id: str = DEFAULT_PROJECT_ID) -> str:
+    """Load the project-scoped user context from a short-lived DB session."""
     db = SessionLocal()
     try:
-        return get_memory_context(db, DEFAULT_USER_ID)
+        return get_memory_context(db, DEFAULT_USER_ID, project_id)
     finally:
         db.close()
 
@@ -81,14 +100,14 @@ def _format_date(value: datetime) -> str:
     return value.date().isoformat()
 
 
-def get_study_progress(db: Session, user_id: str) -> dict[str, list[dict[str, Any]]]:
+def get_study_progress(db: Session, user_id: str, project_id: str) -> dict[str, list[dict[str, Any]]]:
     """Return factual study records only, with standardized weak-topic schemas."""
-    attempts = crud.get_quiz_attempts(db, user_id)
+    attempts = crud.get_quiz_attempts(db, user_id, project_id)
     weak_facts = crud.get_user_memory(
-        db, user_id, fact_type=MemoryFactType.WEAK_TOPIC
+        db, user_id, project_id, fact_type=MemoryFactType.WEAK_TOPIC
     )
     studied_facts = crud.get_user_memory(
-        db, user_id, fact_type=MemoryFactType.STUDIED_TOPIC
+        db, user_id, project_id, fact_type=MemoryFactType.STUDIED_TOPIC
     )
 
     formatted_attempts = []
@@ -144,7 +163,7 @@ def get_study_progress(db: Session, user_id: str) -> dict[str, list[dict[str, An
 
 
 
-def create_study_progress_tool() -> BaseTool:
+def create_study_progress_tool(project_id: str) -> BaseTool:
     """Create the no-input agent tool for student performance questions."""
 
     @tool
@@ -154,7 +173,7 @@ def create_study_progress_tool() -> BaseTool:
         """Use for the student's own quiz attempts, weaknesses, progress, or history. Takes no arguments."""
         db = SessionLocal()
         try:
-            return get_study_progress(db, DEFAULT_USER_ID)
+            return get_study_progress(db, DEFAULT_USER_ID, project_id)
         finally:
             db.close()
 

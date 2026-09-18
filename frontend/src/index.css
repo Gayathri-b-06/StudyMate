@@ -1,9 +1,13 @@
 @import "tailwindcss";
 
+html {
+  font-size: 16px;
+}
+
 :root {
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   color: var(--text-primary);
-  background: var(--bg);
+  background: var(--bg-ambient);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -17,9 +21,55 @@
 body {
   min-width: 320px;
   margin: 0;
-  background-color: var(--bg);
+  position: relative;
+  isolation: isolate;
+  background: var(--bg-ambient);
   color: var(--text-primary);
   overflow-x: hidden;
+}
+
+/* App-wide ambient depth: decorative only, below all routes and surfaces. */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  z-index: 0;
+  width: 32rem;
+  height: 32rem;
+  border-radius: 9999px;
+  filter: blur(88px);
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+body::before {
+  top: 8rem;
+  right: -15rem;
+  background: var(--color-brand-subtle);
+}
+
+body::after {
+  bottom: -17rem;
+  left: -14rem;
+  background: #BBF7D0;
+}
+
+/* Page roots retain their existing classes while allowing the global canvas through. */
+.bg-\[\#F8FAF9\] {
+  background-color: transparent !important;
+}
+
+/* Shared elevation for the restrained card surfaces used throughout the app. */
+.card-academic,
+.card-academic-mint,
+.shadow-xs,
+.shadow-2xs {
+  box-shadow: var(--shadow-card);
 }
 
 button,
@@ -29,9 +79,242 @@ select {
   font: inherit;
 }
 
+/* ── Typography Utility Classes ─────────────────────────── */
+.font-heading {
+  font-family: var(--font-heading);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
 .font-mono-numbers {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+.type-stat-number {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  line-height: 1.1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.type-stat-label {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.type-card-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-base);
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.type-body-sm {
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+/* ── Academic Design System Component Utilities ─────────── */
+.card-academic {
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-academic:hover {
+  border-color: var(--border-strong);
+}
+
+.card-academic-mint {
+  background: #F0FDF4;
+  border: 1px solid #BBF7D0;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.btn-emerald {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-control);
+  background-color: var(--color-brand-primary);
+  padding: 0.625rem 1.25rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: #FFFFFF;
+  box-shadow: var(--shadow-xs);
+  transition: all 0.18s ease;
+  cursor: pointer;
+}
+
+.btn-emerald:hover {
+  background-color: var(--color-brand-hover);
+  box-shadow: var(--shadow-brand);
+}
+
+.btn-emerald:active {
+  background-color: var(--color-brand-active);
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-control);
+  background-color: #FFFFFF;
+  border: 1px solid var(--border);
+  padding: 0.625rem 1.25rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xs);
+  transition: all 0.18s ease;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-panel-raised);
+  border-color: var(--border-strong);
+}
+
+.btn-mint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-control);
+  background-color: var(--color-brand-light);
+  border: 1px solid var(--color-brand-border);
+  padding: 0.5rem 1rem;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-brand-active);
+  transition: all 0.18s ease;
+  cursor: pointer;
+}
+
+.btn-mint:hover {
+  background-color: #D1FAE5;
+  border-color: #6EE7B7;
+}
+
+.badge-mint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-brand-light);
+  border: 1px solid var(--color-brand-border);
+  padding: 0.2rem 0.625rem;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--color-brand-active);
+}
+
+.badge-amber {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--warning-soft);
+  border: 1px solid var(--warning-border);
+  padding: 0.2rem 0.625rem;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.badge-rose {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  padding: 0.2rem 0.625rem;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.badge-blue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--info-soft);
+  border: 1px solid var(--info-border);
+  padding: 0.2rem 0.625rem;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--info);
+}
+
+/* ── Concept Mastery Semantic Utilities ──────────────────── */
+.badge-mastered {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--mastery-mastered-bg);
+  border: 1px solid var(--mastery-mastered-border);
+  padding: 0.2rem 0.625rem;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  color: var(--mastery-mastered-text);
+}
+
+.badge-developing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--mastery-developing-bg);
+  border: 1px solid var(--mastery-developing-border);
+  padding: 0.2rem 0.625rem;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  color: var(--mastery-developing-text);
+}
+
+.badge-attention {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--mastery-attention-bg);
+  border: 1px solid var(--mastery-attention-border);
+  padding: 0.2rem 0.625rem;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  color: var(--mastery-attention-text);
+}
+
+.progress-fill-mastered {
+  background-color: var(--mastery-mastered-fill);
+}
+
+.progress-fill-developing {
+  background-color: var(--mastery-developing-fill);
+}
+
+.progress-fill-attention {
+  background-color: var(--mastery-attention-fill);
 }
 
 /* ── Custom Scrollbars ───────────────────────────────────── */
@@ -43,41 +326,17 @@ select {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.12);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 92, 246, 0.4);
-}
-
-/* ── Glassmorphism Utility Classes ───────────────────────── */
-.glass-panel {
-  background: var(--surface-glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border);
-}
-
-.glass-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%), var(--surface-1);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-card);
-}
-
-.glass-card:hover {
-  border-color: var(--border-glow);
-}
-
-.glow-accent {
-  box-shadow: var(--glow-accent);
+  background: rgba(5, 150, 105, 0.4);
 }
 
 /* ── 3D Flashcard Flip Mechanics ─────────────────────────── */
 .flip-outer {
-  width: min(520px, 100%);
-  min-height: 340px;
+  width: min(540px, 100%);
+  min-height: 350px;
   perspective: 2000px;
   cursor: pointer;
   margin-inline: auto;
@@ -106,18 +365,20 @@ select {
   text-rendering: geometricPrecision;
   display: flex;
   flex-direction: column;
-  padding: 28px;
-  background-color: #12121c;
+  padding: 32px;
+  background-color: #FFFFFF;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-card);
-  min-height: 340px;
+  min-height: 350px;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .face-back {
   transform: rotateY(180deg) translateZ(0);
-  background-color: #181826;
+  background-color: #F8FAF9;
+  border-color: #A7F3D0;
 }
-
 
 /* ── Keyframe Animations ─────────────────────────────────── */
 @keyframes shimmer {
@@ -126,16 +387,52 @@ select {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, var(--surface-1) 25%, var(--surface-2) 50%, var(--surface-1) 75%);
+  background: linear-gradient(90deg, #F1F5F3 25%, #E2E8F0 50%, #F1F5F3 75%);
   background-size: 800px 100%;
   animation: shimmer 1.4s infinite linear;
   border-radius: 12px;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-in {
   animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes bounce-dot {
+  0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+  40%           { transform: scale(1.2); opacity: 1; }
+}
+
+.card-lift {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.card-lift:hover {
+  transform: translateY(-2px);
+  border-color: #A7F3D0;
+  box-shadow: var(--shadow-hover);
+}
+
+/* ── Accessibility: Reduced Motion ──────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-fade-in,
+  .skeleton {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+  .card-lift:hover {
+    transform: none !important;
+  }
 }

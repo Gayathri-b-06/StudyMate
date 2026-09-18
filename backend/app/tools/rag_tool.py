@@ -23,12 +23,15 @@ VectorstorePathResolver = Callable[[str], list[str]]
 
 
 def get_vectorstore_paths_for_thread(thread_id: str) -> list[str]:
-    """Return persisted vector-store paths belonging to one StudyMate thread."""
+    """Return project-level sources for the active conversation's project."""
     db = SessionLocal()
     try:
+        thread = crud.get_thread(db, thread_id)
+        if thread is None:
+            return []
         return [
             document.vectorstore_path
-            for document in crud.list_documents_for_thread(db, thread_id)
+            for document in crud.list_documents_for_project(db, thread.project_id)
         ]
     finally:
         db.close()
@@ -79,49 +82,121 @@ def create_rag_tool(
     *,
     vectorstore_path_resolver: VectorstorePathResolver = get_vectorstore_paths_for_thread,
 ) -> BaseTool:
-    """Create a tool that retrieves context from documents in the active thread.
+    """Create a tool that retrieves context from all documents in the active project.
 
     LangChain injects invocation configuration, keeping ``thread_id`` out of
     the model-visible tool schema.
     """
 
-    @tool
-    def search_uploaded_documents(query: str, config: RunnableConfig) -> str:
-        """Search this conversation's uploaded PDF documents for facts needed to answer a question about uploaded study material."""
+    @tool(response_format="content_and_artifact")
+    def search_uploaded_documents(query: str, config: RunnableConfig) -> tuple[str, dict[str, Any]]:
+        """Search the current project's uploaded PDF documents for facts needed to answer a study question."""
         logger.info(
             "ToolNode executing search_uploaded_documents with query=%r", query
         )
         thread_id = config.get("configurable", {}).get("thread_id")
         if not isinstance(thread_id, str) or not thread_id:
             logger.warning("No thread_id available for document retrieval.")
-            return "No conversation identity is available for document retrieval."
+            return "No conversation identity is available for document retrieval.", {
+                "status": "no_identity",
+                "query": query,
+            }
 
         paths = vectorstore_path_resolver(thread_id)
         if not paths:
-            logger.info("No vectorstore paths found for this thread.")
-            return "No uploaded documents are available in this conversation."
+            logger.info("AI Tutor retrieval: thread_id=%s source=project_documents results=0 fallback=no_documents", thread_id)
+            return "No uploaded documents are available in this project.", {
+                "status": "no_documents",
+                "query": query,
+            }
 
         chunks: list[Any] = []
 
-        for path in paths:
+        def _retrieve_one(path: str) -> list[Any]:
             try:
-                chunks.extend(retrieve(
+                return retrieve(
                     query,
                     path,
                     embeddings,
                     use_hybrid_search=True,
                     k=8,           # reduced from 15 to save tokens
                     rerank_top_k=4, # reduced from 6 to save tokens
-                ))
+                    min_relevance_score=0.15,  # PRD §7 calibrated threshold to prevent hallucination
+                )
             except DocumentNotIndexedError:
-                continue
+                return []
+
+        if len(paths) == 1:
+            chunks.extend(_retrieve_one(paths[0]))
+        else:
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(paths), 4)) as executor:
+                for path_results in executor.map(_retrieve_one, paths):
+                    chunks.extend(path_results)
+
+        if not chunks:
+            # A strict relevance threshold is useful for precision, but it must not
+            # turn a valid project library into a silent empty answer.  Retry once
+            # with the best available chunks and let the grounded synthesizer state
+            # when the passages still do not answer the question.
+            logger.info(
+                "AI Tutor retrieval: no chunks at calibrated threshold; retrying project sources with fallback threshold"
+            )
+
+            def _retrieve_fallback(path: str) -> list[Any]:
+                try:
+                    return retrieve(
+                        query,
+                        path,
+                        embeddings,
+                        use_hybrid_search=True,
+                        k=4,
+                        rerank_top_k=2,
+                        min_relevance_score=0.0,
+                    )
+                except DocumentNotIndexedError:
+                    return []
+
+            if len(paths) == 1:
+                chunks.extend(_retrieve_fallback(paths[0]))
+            else:
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(paths), 4)) as executor:
+                    for path_results in executor.map(_retrieve_fallback, paths):
+                        chunks.extend(path_results)
+
+        if not chunks:
+            logger.info(
+                "ToolNode search_uploaded_documents: no chunks met relevance threshold 0.15 for query=%r",
+                query,
+            )
+            return (
+                "The uploaded documents do not contain sufficient evidence to answer this question reliably.",
+                {
+                    "status": "insufficient_evidence",
+                    "query": query,
+                    "confidence": 0.0,
+                    "chunks": 0,
+                },
+            )
 
         chunks.sort(key=lambda chunk: chunk.relevance_score or 0.0, reverse=True)
+        top_score = float(chunks[0].relevance_score or 0.0)
         context = _format_context(chunks)
         logger.info(
-            "ToolNode completed search_uploaded_documents: retrieved_chunks=%d",
-            len(chunks),
+            "AI Tutor retrieval: thread_id=%s source=project_documents paths=%d results=%d",
+            thread_id, len(paths), len(chunks),
         )
-        return context
+        logger.info(
+            "ToolNode completed search_uploaded_documents: retrieved_chunks=%d, top_score=%.4f",
+            len(chunks),
+            top_score,
+        )
+        return context, {
+            "status": "evidence_found",
+            "query": query,
+            "confidence": top_score,
+            "chunks": len(chunks),
+        }
 
     return search_uploaded_documents

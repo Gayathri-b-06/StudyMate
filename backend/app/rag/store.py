@@ -20,6 +20,7 @@ import hashlib
 import json
 import uuid
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Mapping, Optional
@@ -136,17 +137,49 @@ def build_and_save_index(
     Raises:
         ValueError: If chunks list is empty.
     """
+    # Defensive sanitization to prevent lone surrogates / null bytes from crashing tokenizers
+    sanitized_chunks: List[Document] = []
+    for chunk in chunks:
+        raw_text = chunk.page_content if isinstance(chunk.page_content, str) else str(chunk.page_content or "")
+        cleaned_text = raw_text.replace("\x00", "").encode("utf-8", "ignore").decode("utf-8")
+        if cleaned_text.strip():
+            chunk.page_content = cleaned_text
+            sanitized_chunks.append(chunk)
+
+    chunks = sanitized_chunks
     if not chunks:
         raise ValueError("Cannot build a FAISS index from an empty chunk list.")
 
     clear_index_cache(save_path)
-    # FAISS.save_local() automatically creates the directory if it doesn't exist
-    vectorstore = FAISS.from_documents(chunks, embeddings)
-    vectorstore.save_local(save_path)
+    # Generate remote vectors exactly once, then construct FAISS from those
+    # vectors.  Keeping the phases separate makes API time observable and
+    # prevents an accidental second embedding pass during index construction.
+    embedding_started = time.perf_counter()
+    vectors = embeddings.embed_documents([chunk.page_content for chunk in chunks])
+    embedding_ms = (time.perf_counter() - embedding_started) * 1000
+    if len(vectors) != len(chunks) or not vectors:
+        raise ValueError("Embedding provider did not return one vector for every chunk.")
+    dimension = len(vectors[0])
+    if dimension <= 0 or any(len(vector) != dimension for vector in vectors):
+        raise ValueError("Embedding provider returned inconsistent vector dimensions.")
 
+    faiss_started = time.perf_counter()
+    vectorstore = FAISS.from_embeddings(
+        list(zip((chunk.page_content for chunk in chunks), vectors)),
+        embeddings,
+        metadatas=[chunk.metadata for chunk in chunks],
+    )
+    faiss_build_ms = (time.perf_counter() - faiss_started) * 1000
+
+    persist_started = time.perf_counter()
+    vectorstore.save_local(save_path)
+    faiss_persist_ms = (time.perf_counter() - persist_started) * 1000
+
+    chunks_started = time.perf_counter()
     chunks_path = os.path.join(save_path, CHUNKS_FILENAME)
     with open(chunks_path, "wb") as f:
         pickle.dump(chunks, f)
+    chunks_persist_ms = (time.perf_counter() - chunks_started) * 1000
 
     sources = sorted({str(chunk.metadata.get("source", "Unknown")) for chunk in chunks})
     pages = [chunk.metadata.get("page") for chunk in chunks]
@@ -162,12 +195,27 @@ def build_and_save_index(
         "sources": sources,
         "page_count": len({page for page in pages if page is not None}),
     })
+    metadata_started = time.perf_counter()
     _write_index_metadata(save_path, metadata)
+    metadata_persist_ms = (time.perf_counter() - metadata_started) * 1000
     clear_index_cache(save_path)
 
     logger.info(
-        f"Successfully saved FAISS index and {len(chunks)} chunk(s) to {save_path}."
+        "Index persisted at %s: chunks=%d, embedding_ms=%.1f, faiss_build_ms=%.1f, "
+        "faiss_persist_ms=%.1f, chunks_persist_ms=%.1f, metadata_persist_ms=%.1f. "
+        "BM25 is intentionally built lazily from chunks.pkl on first hybrid query; "
+        "there is no separate BM25 persistence stage.",
+        save_path, len(chunks), embedding_ms, faiss_build_ms, faiss_persist_ms,
+        chunks_persist_ms, metadata_persist_ms,
     )
+    return {
+        "embedding_ms": embedding_ms,
+        "faiss_build_ms": faiss_build_ms,
+        "faiss_persist_ms": faiss_persist_ms,
+        "chunks_persist_ms": chunks_persist_ms,
+        "metadata_persist_ms": metadata_persist_ms,
+        "embedding_dimension": int(vectorstore.index.d),
+    }
 
 
 def load_index(
@@ -226,6 +274,18 @@ def load_index(
             embeddings,
             allow_dangerous_deserialization=True,
         )
+        if metadata and metadata.get("embedding_dimension") and int(metadata["embedding_dimension"]) != int(loaded.index.d):
+            raise VectorStoreLoadError(
+                "Index vector dimension does not match its persisted metadata. Rebuild the index before retrieving.",
+                save_path,
+            )
+        req_dim = getattr(embeddings, "embedding_dimension", None)
+        if req_dim is not None and int(req_dim) != int(loaded.index.d):
+            raise VectorStoreLoadError(
+                f"Index vector dimension ({loaded.index.d}) does not match requested embedding model dimension ({req_dim}). "
+                "Rebuild the index before retrieving.",
+                save_path,
+            )
         with _INDEX_CACHE_LOCK:
             # Remove stale incarnations of this path before saving the new one.
             resolved = cache_key[0]

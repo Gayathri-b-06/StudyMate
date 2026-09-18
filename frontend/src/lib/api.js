@@ -5,14 +5,20 @@ export { API_BASE_URL, ApiError, request }
 /**
  * Send a chat message over SSE stream, yielding tool_result and message events.
  */
-export async function sendChatMessageStream(message, threadId, { onToolResult, onMessage }) {
+export async function sendChatMessageStream(message, projectId, threadId, { onToolResult, onMessage }) {
+  const token = (() => {
+    try { return JSON.parse(localStorage.getItem('studymate_auth_session'))?.token }
+    catch { return null }
+  })()
   const response = await fetch(`${API_BASE_URL}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
       message,
+      project_id: projectId,
       ...(threadId ? { thread_id: threadId } : {}),
       stream: true,
     }),

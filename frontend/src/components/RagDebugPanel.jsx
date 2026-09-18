@@ -23,7 +23,7 @@ function ChunkCard({ chunk, index }) {
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-slate-800/50"
       >
-        <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-violet-500/20 text-[10px] font-bold text-violet-300">
+        <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-ember)]/20 text-[10px] font-bold text-[var(--color-ember)]">
           {index + 1}
         </span>
         <div className="min-w-0 flex-1">
@@ -37,7 +37,7 @@ function ChunkCard({ chunk, index }) {
             <ScoreBadge
               label="sim"
               value={chunk.similarity_score}
-              color="bg-violet-500/15 text-violet-300 ring-violet-400/20"
+              color="bg-[var(--color-ember)]/15 text-[var(--color-ember)] ring-[var(--color-ember)]/20"
             />
             {chunk.rerank_score != null && (
               <ScoreBadge
@@ -173,7 +173,7 @@ export default function RagDebugPanel({ threadId }) {
               value={selectedDocId}
               onChange={(e) => { setSelectedDocId(e.target.value); setResult(null) }}
               disabled={isQuerying}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-60"
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-ember)] disabled:opacity-60"
             >
               {documents.map((doc) => (
                 <option key={doc.id} value={doc.id}>
@@ -196,7 +196,7 @@ export default function RagDebugPanel({ threadId }) {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="e.g. explain gradient descent"
             disabled={isQuerying}
-            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-600 focus:border-violet-500 disabled:opacity-60"
+            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-600 focus:border-[var(--color-ember)] disabled:opacity-60"
           />
         </div>
 
@@ -212,7 +212,7 @@ export default function RagDebugPanel({ threadId }) {
               value={k}
               onChange={(e) => setK(Number(e.target.value))}
               disabled={isQuerying}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-60"
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-ember)] disabled:opacity-60"
             />
           </div>
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400">
@@ -220,7 +220,7 @@ export default function RagDebugPanel({ threadId }) {
               type="checkbox"
               checked={useReranking}
               onChange={(e) => setUseReranking(e.target.checked)}
-              className="accent-violet-500"
+              className="accent-[var(--color-ember)]"
             />
             Reranking
           </label>
@@ -229,18 +229,18 @@ export default function RagDebugPanel({ threadId }) {
               type="checkbox"
               checked={useHybrid}
               onChange={(e) => setUseHybrid(e.target.checked)}
-              className="accent-violet-500"
+              className="accent-[var(--color-ember)]"
             />
             Hybrid search
           </label>
           <button
             type="submit"
             disabled={!query.trim() || isQuerying || !selectedDoc}
-            className="ml-auto rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ml-auto rounded-lg bg-[var(--color-ember)] px-4 py-2 text-sm font-semibold text-[var(--color-ink)] transition hover:bg-[var(--color-ember-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isQuerying ? (
               <span className="flex items-center gap-2">
-                <span className="size-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <span className="size-3.5 animate-spin rounded-full border-2 border-[var(--color-ink)] border-t-transparent" />
                 Querying…
               </span>
             ) : 'Query'}
@@ -270,7 +270,7 @@ export default function RagDebugPanel({ threadId }) {
                 {result.sources.map((src, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 rounded bg-slate-800/80 px-2 py-0.5 text-[11px] font-medium text-violet-300 ring-1 ring-inset ring-violet-400/20"
+                    className="inline-flex items-center gap-1 rounded bg-slate-800/80 px-2 py-0.5 text-[11px] font-medium text-[var(--color-ember)] ring-1 ring-inset ring-[var(--color-ember)]/20"
                   >
                     📄 {src.document}{src.page != null ? `, p. ${src.page}` : ''}
                   </span>

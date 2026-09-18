@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 
 
-_CITATION_MARKER_PATTERN = re.compile(r"\[\[cite:(\d+)\]\]", re.IGNORECASE)
+_CITATION_MARKER_PATTERNS = (
+    re.compile(r"\[\[cite:(\d+)\]\]", re.IGNORECASE),
+    re.compile(r"\[(?:SOURCE|source):\s*(\d+)\]", re.IGNORECASE),
+    re.compile(r"\[(?:SOURCE|source)\s+(\d+)\]", re.IGNORECASE),
+)
+
 _GROUNDED_REFUSAL_PHRASES: tuple[str, ...] = (
     "i couldn't find information about",
     "the provided context does not contain enough information",
@@ -15,6 +20,11 @@ _GROUNDED_REFUSAL_PHRASES: tuple[str, ...] = (
     "the context does not contain",
     "not found in the uploaded",
     "not available in the uploaded",
+    "insufficient evidence",
+    "do not contain sufficient evidence",
+    "does not contain sufficient evidence",
+    "do not contain enough reliable information",
+    "does not contain enough reliable information",
 )
 
 
@@ -28,14 +38,18 @@ def extract_citation_ids(response_text: str) -> list[int]:
     """Return unique, in-order source IDs explicitly selected by the model."""
     selected_ids: list[int] = []
     seen: set[int] = set()
-    for match in _CITATION_MARKER_PATTERN.finditer(response_text):
-        citation_id = int(match.group(1))
-        if citation_id not in seen:
-            seen.add(citation_id)
-            selected_ids.append(citation_id)
+    for pattern in _CITATION_MARKER_PATTERNS:
+        for match in pattern.finditer(response_text):
+            citation_id = int(match.group(1))
+            if citation_id not in seen:
+                seen.add(citation_id)
+                selected_ids.append(citation_id)
     return selected_ids
 
 
 def strip_citation_markers(response_text: str) -> str:
     """Remove internal evidence markers before returning an answer to an API client."""
-    return _CITATION_MARKER_PATTERN.sub("", response_text).replace("  ", " ").strip()
+    cleaned = response_text
+    for pattern in _CITATION_MARKER_PATTERNS:
+        cleaned = pattern.sub("", cleaned)
+    return cleaned.replace("  ", " ").strip()

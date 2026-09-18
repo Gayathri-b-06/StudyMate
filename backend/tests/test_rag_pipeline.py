@@ -3,8 +3,10 @@ Unit tests for the StudyMate RAG pipeline (Module 2).
 """
 
 import io
+import re
 import pytest
 from reportlab.pdfgen import canvas
+from langchain_core.embeddings import Embeddings
 
 from app.rag.ingest import load_and_chunk_pdf
 from app.rag.exceptions import PDFIngestError
@@ -72,15 +74,50 @@ def test_load_and_chunk_pdf_raises_on_corrupted_bytes():
 # ---------------------------------------------------------------------------
 
 import os
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from app.rag.store import build_and_save_index, load_index, delete_index
 from app.rag.exceptions import VectorStoreLoadError
 
 @pytest.fixture(scope="module")
 def embeddings():
-    """Fixture to load embeddings once for all store/retriever tests."""
-    return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    """A deterministic, offline embedding provider for index/retrieval tests.
+
+    These tests validate StudyMate's FAISS persistence and hybrid retrieval
+    plumbing, not a third-party model download.  Keeping the fixture local
+    prevents an unavailable Hugging Face connection from breaking the suite.
+    """
+    class TestEmbeddings(Embeddings):
+        _terms = {
+            term: index for index, term in enumerate((
+                "fox", "dog", "machine", "learning", "artificial", "intelligence",
+                "mitochondria", "atp", "respiration", "powerhouse", "production",
+            ))
+        }
+        _synonyms = {
+            "animal": ("fox", "dog"),
+            "powerhouse": ("mitochondria", "atp", "respiration"),
+            "production": ("atp", "respiration"),
+            "learning": ("machine", "artificial", "intelligence"),
+        }
+
+        @classmethod
+        def _embed(cls, text):
+            vector = [0.0] * 64
+            for token in re.findall(r"[a-z0-9]+", text.lower()):
+                for term in (token, *cls._synonyms.get(token, ())):
+                    index = cls._terms.get(term)
+                    if index is not None:
+                        vector[index] += 1.0
+            magnitude = sum(value * value for value in vector) ** 0.5
+            return [value / magnitude for value in vector] if magnitude else vector
+
+        def embed_documents(self, texts):
+            return [self._embed(text) for text in texts]
+
+        def embed_query(self, text):
+            return self._embed(text)
+
+    return TestEmbeddings()
 
 @pytest.fixture
 def temp_index_dir(tmp_path):

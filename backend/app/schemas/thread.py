@@ -37,4 +37,8 @@ class ThreadChatMessage(BaseModel):
         default=None,
         description="Optional snapshot of structured study progress data for thread history.",
     )
+    response_type: str | None = Field(
+        default=None,
+        description="Optional semantic response type (e.g. 'insufficient_evidence', 'grounded_answer').",
+    )
 

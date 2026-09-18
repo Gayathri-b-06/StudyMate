@@ -129,6 +129,22 @@ def load_and_chunk_pdf(
         
         chunks = splitter.split_documents(docs)
         
+        # Sanitize chunk page_content:
+        # 1. Strip lone surrogate code points (\ud800-\udfff) extracted from mathematical symbols
+        #    or corrupted PDF font encodings, which crash Rust/PyO3 tokenizers in HuggingFace with:
+        #    TypeError: TextEncodeInput must be Union[TextInputSequence, Tuple[InputSequence, InputSequence]]
+        # 2. Remove null bytes (\x00) which break database and C string handling.
+        # 3. Discard empty or whitespace-only chunks.
+        cleaned_chunks: List[Document] = []
+        for chunk in chunks:
+            raw_text = chunk.page_content if isinstance(chunk.page_content, str) else str(chunk.page_content or "")
+            cleaned_text = raw_text.replace("\x00", "").encode("utf-8", "ignore").decode("utf-8")
+            if cleaned_text.strip():
+                chunk.page_content = cleaned_text
+                cleaned_chunks.append(chunk)
+
+        chunks = cleaned_chunks
+
         # This check catches scanned/image-only PDFs where pages had no extractable text,
         # resulting in the splitter producing zero text chunks.
         if not chunks:

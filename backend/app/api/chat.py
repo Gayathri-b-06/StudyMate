@@ -10,7 +10,9 @@ from fastapi.responses import StreamingResponse
 from groq import APIConnectionError, APITimeoutError, BadRequestError
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_chat_service, get_thread_service
+from app.api.dependencies import get_chat_service, get_current_user, get_thread_service
+from app.db import crud
+from app.db.models import User
 from app.db.session import get_db
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.chat_service import ChatService, ChatServiceError
@@ -26,13 +28,22 @@ def send_chat_message(
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
     thread_service: Annotated[ThreadService, Depends(get_thread_service)],
     db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> ChatResponse | StreamingResponse:
     """Return the graph-generated assistant response for one user message."""
+    if not crud.verify_project_owner(db, payload.project_id, current_user.id):
+        raise HTTPException(status_code=404, detail="Project or thread not found.")
+    if payload.thread_id and not crud.verify_thread_owner(db, payload.thread_id, current_user.id):
+        raise HTTPException(status_code=404, detail="Project or thread not found.")
     try:
-        thread = thread_service.resolve_thread(db, payload.thread_id)
+        thread = thread_service.resolve_thread(db, payload.thread_id, payload.project_id)
     except ThreadNotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found."
+        ) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project or thread not found."
         ) from error
 
     try:
@@ -81,8 +92,19 @@ def send_chat_message(
 
     thread_service.set_automatic_title(db, thread.id, payload.message)
     thread_service.touch_thread(db, thread.id)
+    response_type = (
+        chat_service.get_last_response_type(thread.id)
+        if hasattr(chat_service, "get_last_response_type")
+        else "grounded_answer"
+    )
+
     if not payload.stream:
-        return ChatResponse(message=assistant_message, thread_id=thread.id, sources=sources)
+        return ChatResponse(
+            message=assistant_message,
+            thread_id=thread.id,
+            response_type=response_type,
+            sources=sources,
+        )
 
     def event_stream() -> Iterator[str]:
         # Phase events (llm_start, tool_start/end, llm_end)
@@ -93,7 +115,10 @@ def send_chat_message(
             yield f"event: tool_result\ndata: {tool_result.model_dump_json()}\n\n"
         # Final message
         message_payload = ChatResponse(
-            message=assistant_message, thread_id=thread.id, sources=sources
+            message=assistant_message,
+            thread_id=thread.id,
+            response_type=response_type,
+            sources=sources,
         )
         yield f"event: message\ndata: {json.dumps(message_payload.model_dump(mode='json'))}\n\n"
         # Explicit stream completion marker
@@ -108,4 +133,3 @@ def send_chat_message(
             "X-Accel-Buffering": "no",
         },
     )
-

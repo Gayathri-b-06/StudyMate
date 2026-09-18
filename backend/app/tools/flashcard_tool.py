@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -49,9 +50,27 @@ def _validate_flashcard_json(
     topic: str,
 ) -> FlashcardGenerateResponse:
     """Parse the model JSON and enforce request-owned metadata."""
-    parsed = FlashcardGenerateResponse.model_validate_json(payload)
+    import re
+    cleaned = payload.strip()
+    json_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+    if json_match:
+        cleaned = json_match.group(1).strip()
+    else:
+        brace_match = re.search(r"(\{[\s\S]*\})", cleaned)
+        if brace_match:
+            cleaned = brace_match.group(1).strip()
+
+    try:
+        parsed = FlashcardGenerateResponse.model_validate_json(cleaned)
+    except Exception:
+        # Fallback using json.loads in case Pydantic needs dict coercion
+        import json
+        data = json.loads(cleaned)
+        parsed = FlashcardGenerateResponse.model_validate(data)
+
     if parsed.document_id != document_id or parsed.topic != topic:
-        raise ValueError("The generated flashcard metadata did not match the request.")
+        parsed.document_id = document_id
+        parsed.topic = topic
     return parsed
 
 
@@ -167,12 +186,17 @@ def create_flashcard_tool(llm: BaseChatModel, embeddings: Any) -> BaseTool:
 
         db = SessionLocal()
         try:
-            documents = crud.list_documents_for_thread(db, thread_id)
+            thread = crud.get_thread(db, thread_id)
+            documents = (
+                crud.list_documents_for_project(db, thread.project_id)
+                if thread is not None
+                else []
+            )
             if not documents:
-                return "No uploaded document is available for flashcards in this conversation.", {}
-            if len(documents) != 1:
-                names = ", ".join(document.filename for document in documents)
-                return f"Please specify which uploaded document to generate flashcards for: {names}.", {}
+                return "No uploaded document is available in this project for flashcards.", {}
+            # The tool API currently accepts one source document. Select the
+            # newest project source; all project files remain available to the
+            # tutor retriever independently of this generation request.
             result = generate_flashcards(
                 llm,
                 documents[0].id,

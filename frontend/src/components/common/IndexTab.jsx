@@ -11,11 +11,12 @@ export default function IndexTab({
   icon: Icon = null,
 }) {
   const variantStyles = {
-    accent: 'bg-[var(--accent-soft)] text-[var(--accent)] border-[var(--accent)]/30',
-    success: 'bg-[var(--success-soft)] text-[var(--success)] border-[var(--success)]/30',
-    warning: 'bg-[var(--warning-soft)] text-[var(--warning)] border-[var(--warning)]/30',
-    danger: 'bg-[var(--danger-soft)] text-[var(--danger)] border-[var(--danger)]/30',
-    muted: 'bg-[var(--surface-2)] text-[var(--text-muted)] border-[var(--border)]',
+    accent: 'bg-zinc-100 text-black border-black/20 font-semibold',
+    success: 'bg-black text-white border-black font-semibold',
+    warning: 'bg-zinc-100 text-zinc-800 border-zinc-400 font-semibold',
+    danger: 'bg-zinc-200 text-black border-black/40 font-bold',
+    muted: 'bg-zinc-50 text-zinc-500 border-zinc-200',
+    neutral: 'bg-zinc-100 text-black border-black/20 font-semibold',
   }
 
   const selectedVariant = variantStyles[variant] || variantStyles.accent

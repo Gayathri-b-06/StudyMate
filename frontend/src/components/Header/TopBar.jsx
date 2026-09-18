@@ -1,38 +1,74 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { WORKSPACE_TOOLS } from '../../config/toolRegistry'
+import UserMenu from './UserMenu'
 
-export default function TopBar() {
-  const { activeWorkspace } = useWorkspace()
+export default function TopBar({ project }) {
+  const { activeWorkspace, activeProjectId } = useWorkspace()
 
   // Find active tool config
   const currentTool = WORKSPACE_TOOLS.find((t) => t.id === activeWorkspace) || WORKSPACE_TOOLS[0]
   const Icon = currentTool.icon
 
+  const spaceName = project?.space_name || 'Space'
+  const projectName = project?.name || 'Project'
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full shrink-0 items-center justify-between border-b border-white/5 bg-[#09090F]/80 px-6 backdrop-blur-xl font-sans transition-colors">
+    <header className="project-topbar sticky top-0 z-30 flex h-16 w-full shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-6 backdrop-blur-md font-sans transition-colors">
       {/* ── Left: Breadcrumbs & Current Tool Badge ─────────────────────── */}
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] font-medium">
-          <span className="text-[var(--text-secondary)]">StudyMate</span>
-          <ChevronRight className="size-3 text-white/20" />
-          <span className="text-[var(--text-secondary)]">Workspace</span>
-          <ChevronRight className="size-3 text-white/20" />
-          <span className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
-            <Icon className="size-3.5 text-[var(--accent)]" />
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-slate-500 font-medium">
+          <Link
+            to="/home"
+            className="hover:text-emerald-700 font-semibold text-slate-700 transition flex items-center gap-1"
+            title="Go to Home Dashboard"
+          >
+            StudyMate
+          </Link>
+          <ChevronRight className="size-3.5 text-slate-400 shrink-0" />
+          <Link
+            to="/spaces"
+            className="hover:text-emerald-700 font-semibold text-slate-700 transition"
+            title="Go to Spaces"
+          >
+            Spaces
+          </Link>
+          <ChevronRight className="size-3.5 text-slate-400 shrink-0" />
+          {project?.space_id ? (
+            <Link
+              to={`/spaces/${project.space_id}`}
+              className="hover:text-emerald-700 font-semibold text-slate-700 transition truncate max-w-[120px]"
+              title={spaceName}
+            >
+              {spaceName}
+            </Link>
+          ) : (
+            <span className="text-slate-600 truncate max-w-[120px]" title={spaceName}>
+              {spaceName}
+            </span>
+          )}
+          <ChevronRight className="size-3.5 text-slate-400 shrink-0" />
+          <Link
+            to={`/projects/${activeProjectId || project?.id}/overview`}
+            className="hover:text-emerald-700 font-semibold text-slate-700 transition truncate max-w-[140px]"
+            title={projectName}
+          >
+            {projectName}
+          </Link>
+          <ChevronRight className="size-3.5 text-slate-400 shrink-0" />
+          <span className="flex items-center gap-1.5 font-bold text-slate-900">
+            <Icon className="size-4 text-emerald-600" />
             {currentTool.title}
           </span>
-        </div>
+        </nav>
 
-        {/* Live Active Status Badge */}
-        <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-2.5 py-0.5 text-[10px] font-semibold text-[var(--accent)] uppercase tracking-wider">
-          <span className="relative flex size-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-75" />
-            <span className="relative inline-flex size-1.5 rounded-full bg-[var(--accent)]" />
-          </span>
-          <span>{currentTool.shortName} AI</span>
-        </span>
+      </div>
+
+      {/* ── Right: User Profile & Controls ────────────────────────────── */}
+      <div className="flex items-center gap-3">
+        <UserMenu />
       </div>
     </header>
   )

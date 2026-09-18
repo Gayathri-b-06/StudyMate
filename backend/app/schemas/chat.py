@@ -19,6 +19,11 @@ class ChatRequest(BaseModel):
         min_length=1,
         description="Optional conversation identifier for short-term memory.",
     )
+    project_id: str = Field(
+        ...,
+        min_length=1,
+        description="ID of the Project this conversation belongs to.",
+    )
     stream: bool = Field(
         default=False,
         description="Emit completed chat and structured tool results as SSE events.",
@@ -30,6 +35,7 @@ class ChatResponse(BaseModel):
 
     message: str
     thread_id: str
+    response_type: str = "grounded_answer"
     sources: list[DocumentCitation] = Field(
         default_factory=list,
         description="Optional list of source document citations if retrieval was used.",

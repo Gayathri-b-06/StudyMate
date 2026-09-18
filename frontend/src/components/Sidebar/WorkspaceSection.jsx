@@ -14,7 +14,7 @@ export default function WorkspaceSection() {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+        className="flex w-full items-center justify-between px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 hover:text-black transition-colors"
       >
         <span>Workspaces</span>
         <ChevronDown
@@ -42,22 +42,22 @@ export default function WorkspaceSection() {
                     onClick={() => setActiveWorkspace(workspace.id)}
                     className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
                       isActive
-                        ? 'text-white'
-                        : 'text-[var(--text-secondary)] hover:bg-white/[0.04] hover:text-white'
+                        ? 'text-black'
+                        : 'text-zinc-600 hover:bg-zinc-100 hover:text-black'
                     }`}
                   >
                     {isActive && (
                       <motion.div
                         layoutId="activeWorkspacePill"
-                        className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600/20 to-indigo-600/10 border border-violet-500/30 shadow-md shadow-violet-500/10"
+                        className="absolute inset-0 rounded-xl bg-zinc-100 border border-black/15 shadow-sm"
                         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                       />
                     )}
 
                     <div className={`relative z-10 grid size-6 place-items-center rounded-lg border transition-all ${
                       isActive
-                        ? 'border-violet-500/40 bg-violet-500/20 text-violet-300 shadow-sm'
-                        : 'border-white/5 bg-white/[0.02] text-[var(--text-muted)] group-hover:border-white/10 group-hover:text-white group-hover:scale-105'
+                        ? 'border-black bg-black text-white shadow-sm'
+                        : 'border-black/10 bg-zinc-50 text-zinc-500 group-hover:border-black/30 group-hover:text-black group-hover:scale-105'
                     }`}>
                       <Icon className="size-3.5" />
                     </div>

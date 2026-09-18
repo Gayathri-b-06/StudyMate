@@ -1,16 +1,45 @@
 # Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 backend/.venv/
 backend/__pycache__/
 backend/*.db
+backend/*.db-*
 backend/.pytest_cache/
 backend/.mypy_cache/
 
 # Environment
+.env.*
+!.env.example
+!.env.*.example
+credentials.json
+credentials.*.json
+credentials
+credentials/
+credentials.yaml
+credentials.yml
+credentials.ini
+*service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+secrets/
+.secrets/
 .env
+.env.local
 backend/.env
+backend/.env.local
 frontend/.env.local
 
 # Node
+node_modules/
 frontend/node_modules/
 
 # Build
@@ -29,5 +58,7 @@ Thumbs.db
 *.log
 
 # Vector stores / generated data
-backend/vectorstore/
+# Project-generated FAISS indexes and uploads; do not commit learner data.
+backend/vectorstores/
 backend/uploads/
+frontend/.env

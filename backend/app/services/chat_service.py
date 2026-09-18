@@ -31,7 +31,7 @@ _TOOL_UI_LABELS: dict[str, str] = {
     "generate_document_quiz"    : "Generating quiz...",
     "generate_document_flashcards": "Generating flashcards...",
     "generate_document_study_plan": "Building study plan...",
-    "get_study_progress"        : "Fetching your progress...",
+    "get_flashcard_learning_status": "Checking flashcard learning status...",
 }
 
 # Map intent values to their expected tool name (for post-hoc event building)
@@ -40,7 +40,7 @@ _INTENT_TOOL_MAP: dict[str, str] = {
     "quiz"        : "generate_document_quiz",
     "flashcard"   : "generate_document_flashcards",
     "study_plan"  : "generate_document_study_plan",
-    "progress"    : "get_study_progress",
+    "progress"    : "get_flashcard_learning_status",
 }
 
 
@@ -84,11 +84,35 @@ class ChatServiceError(RuntimeError):
     """Raised when the chat graph does not produce an assistant response."""
 
 
+def _message_text(message: AIMessage) -> str:
+    """Extract visible text from provider-specific AIMessage content safely."""
+    if isinstance(message.content, str):
+        return message.content.strip()
+    if isinstance(message.content, list):
+        parts: list[str] = []
+        for part in message.content:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict) and isinstance(part.get("text"), str):
+                parts.append(part["text"])
+        return "".join(parts).strip()
+    return str(message.content or "").strip()
+
+
 def extract_citations_from_messages(
     messages: list[Any], assistant_response: str
 ) -> list[DocumentCitation]:
-    """Return source pages referenced by evidence markers, or all retrieved sources if markers are omitted."""
-    if is_grounded_refusal(assistant_response):
+    """Return source pages referenced by evidence markers."""
+    if not assistant_response or is_grounded_refusal(assistant_response):
+        return []
+
+    if assistant_response.strip().startswith("> ⚠️ **Insufficient Evidence"):
+        return []
+
+    # PRD §7: Citations must ONLY render when the answer generation step
+    # explicitly cited and used that chunk. A generic fallback answer must never carry a Sources block.
+    selected_ids = extract_citation_ids(assistant_response)
+    if not selected_ids:
         return []
 
     candidates: dict[int, DocumentCitation] = {}
@@ -99,8 +123,11 @@ def extract_citations_from_messages(
             if tool_name and tool_name not in ("search_uploaded_documents", "generate_document_quiz", "generate_document_flashcards"):
                 continue
 
-            # 1. Check artifact first if set by tool
             raw_artifact = getattr(message, "artifact", None)
+            if isinstance(raw_artifact, dict) and raw_artifact.get("status") in ("insufficient_evidence", "no_documents", "no_identity"):
+                continue
+
+            # 1. Check artifact first if set by tool
             if isinstance(raw_artifact, list) and raw_artifact:
                 for position, item in enumerate(raw_artifact, start=1):
                     if isinstance(item, dict) and "document" in item:
@@ -118,7 +145,12 @@ def extract_citations_from_messages(
 
             # 2. Fallback: Parse formatted text content of ToolMessage
             content = str(message.content or "")
-            if not content or "No relevant uploaded-document context" in content or "No uploaded documents" in content:
+            if (
+                not content
+                or "No relevant uploaded-document context" in content
+                or "No uploaded documents" in content
+                or "do not contain sufficient evidence" in content
+            ):
                 continue
 
             matches = re.findall(
@@ -135,12 +167,9 @@ def extract_citations_from_messages(
     if not candidates:
         return []
 
-    selected_ids = extract_citation_ids(assistant_response)
-    target_ids = selected_ids if selected_ids else list(candidates.keys())
-
     citations: list[DocumentCitation] = []
     seen: set[tuple[str, int | None]] = set()
-    for citation_id in target_ids:
+    for citation_id in selected_ids:
         citation = candidates.get(citation_id)
         if citation is None:
             continue
@@ -160,6 +189,7 @@ class ChatService:
         # Keep a name → callable map so we can manually execute a tool when
         # the model generates a malformed text-based tool call.
         self._tools: dict[str, Any] = {t.name: t for t in (tools or [])}
+        self._last_response_types: dict[str, str] = {}
 
     def _invoke(
         self,
@@ -184,11 +214,39 @@ class ChatService:
         assistant_response: str | None = None
         for message in reversed(messages):
             if isinstance(message, AIMessage):
-                assistant_response = message.text
+                assistant_response = _message_text(message)
                 break
 
-        if assistant_response is None:
-            raise ChatServiceError("The chat graph completed without an assistant response.")
+        if not assistant_response or not assistant_response.strip():
+            logger.error(
+                "Chat graph returned an empty assistant response (thread_id=%s, intent=%s, messages=%d)",
+                thread_id, intent, len(messages),
+            )
+            # Do not let an empty provider payload reach the UI as [] or a blank
+            # assistant bubble. First retrieve and synthesize against the project
+            # sources directly, so a document-grounded question never falls back
+            # to model memory merely because a graph response was empty.
+            try:
+                rag_tool = self._tools.get("search_uploaded_documents")
+                if rag_tool is not None:
+                    grounded = self._answer_with_manual_tool_result(
+                        user_message, thread_id, rag_tool, {"query": user_message}
+                    )
+                    if grounded is not None and grounded[0].strip():
+                        text, citations, artifacts = grounded
+                        return text, citations, artifacts, []
+
+                fallback, fallback_citations, fallback_artifacts = self._invoke_without_tools(
+                    user_message, thread_id
+                )
+                if fallback.strip():
+                    return fallback, fallback_citations, fallback_artifacts, []
+            except Exception:
+                logger.exception("No-tool fallback failed after an empty graph response.")
+            return (
+                "I couldn't generate a response for that question. Please try again.",
+                [], [], [],
+            )
 
         tool_results: list[Any] = []
         tool_names_used: list[str] = []
@@ -208,7 +266,7 @@ class ChatService:
             if not isinstance(message, ToolMessage):
                 continue
             tool_names_used.append(message.name or "")
-            if message.name == "get_study_progress":
+            if message.name == "get_flashcard_learning_status":
                 try:
                     raw_content = message.content
                     if isinstance(raw_content, str):
@@ -259,6 +317,13 @@ class ChatService:
             if intent == "document_qa"
             else []
         )
+        last_ai = messages[-1] if messages and isinstance(messages[-1], AIMessage) else None
+        response_type = "grounded_answer"
+        if last_ai:
+            meta = getattr(last_ai, "response_metadata", {}) or {}
+            response_type = meta.get("response_type") or ("general_chat" if intent == "general_chat" else "grounded_answer")
+        self._last_response_types[thread_id] = response_type
+
         return strip_citation_markers(assistant_response), citations, tool_results, sse_events
 
     def _has_pending_user_message(self, user_message: str, thread_id: str) -> bool:
@@ -433,7 +498,7 @@ class ChatService:
                 ),
             ]
         )
-        answer = strip_citation_markers(str(response.content or ""))
+        answer = strip_citation_markers(_message_text(response))
         # Parse [SOURCE:N] citations from the tool result text.
         citations = extract_citations_from_messages(
             # Fake a ToolMessage list so the extractor can parse the text.
@@ -457,7 +522,10 @@ class ChatService:
                 HumanMessage(content=user_message),
             ]
         )
-        return strip_citation_markers(str(response.content or "")), [], []
+        answer = strip_citation_markers(_message_text(response))
+        if not answer:
+            answer = "I couldn't generate a response for that question. Please try again."
+        return answer, [], []
 
     def chat(self, user_message: str, thread_id: str) -> tuple[str, list[DocumentCitation]]:
         """Send one user message to the graph and return assistant reply and sources citations."""
@@ -471,6 +539,10 @@ class ChatService:
     ) -> tuple[str, list[DocumentCitation], list[Any], list[dict]]:
         """Invoke chat; return text, citations, structured artifacts, and SSE events."""
         return self._invoke_with_tool_failure_retry(user_message, thread_id)
+
+    def get_last_response_type(self, thread_id: str) -> str:
+        """Return the semantic response type of the most recent turn in this thread."""
+        return self._last_response_types.get(thread_id, "grounded_answer")
 
     def get_thread_history(self, thread_id: str) -> list[ThreadChatMessage]:
         """Retrieve and format past conversation messages from the LangGraph checkpoint state."""
@@ -496,26 +568,19 @@ class ChatService:
                         if recent_tool_messages
                         else []
                     )
-                    progress_data = None
-                    for tm in recent_tool_messages:
-                        if tm.name == "get_study_progress":
-                            try:
-                                raw = tm.content
-                                data = json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
-                                progress_data = {
-                                    "tool": "progress",
-                                    "quiz_attempts": data.get("quiz_attempts", []),
-                                    "weak_topics": data.get("weak_topics", []),
-                                    "studied_topics": data.get("studied_topics", []),
-                                }
-                            except Exception:
-                                pass
+                    msg_meta = getattr(message, "response_metadata", {}) or {}
+                    resp_type = msg_meta.get("response_type")
+                    if not resp_type:
+                        if content.startswith("> ⚠️ **Insufficient Evidence"):
+                            resp_type = "insufficient_evidence"
+                        else:
+                            resp_type = "grounded_answer"
                     history.append(
                         ThreadChatMessage(
                             role="assistant",
                             content=strip_citation_markers(content),
                             sources=citations,
-                            progress_data=progress_data,
+                            response_type=resp_type,
                         )
                     )
                     recent_tool_messages = []

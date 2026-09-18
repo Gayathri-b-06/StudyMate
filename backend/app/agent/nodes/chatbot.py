@@ -12,7 +12,7 @@ Node map
 - ``create_quiz_node``           → binds generate_document_quiz
 - ``create_flashcard_node``      → binds generate_document_flashcards
 - ``create_study_plan_node``     → binds generate_document_study_plan
-- ``create_progress_node``       → binds get_study_progress
+- ``create_progress_node``       → reads flashcard learning status
 - ``create_synthesis_node``      → no tools (tool_choice="none"); picks
                                    prompt based on state["intent"]
 - ``create_no_document_node``    → pure Python, returns fixed reply
@@ -21,6 +21,8 @@ Node map
 from __future__ import annotations
 
 import logging
+import re
+import uuid
 from collections.abc import Callable, Sequence
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -30,6 +32,7 @@ from langchain_core.tools import BaseTool
 
 from app.agent.prompts import (
     CHATBOT_SYSTEM_PROMPT,
+    DOCUMENT_QA_SYSTEM_PROMPT,
     FLASHCARD_RESULT_SYSTEM_PROMPT,
     GENERAL_CHAT_SYSTEM_PROMPT,
     GROUNDED_ANSWER_SYSTEM_PROMPT,
@@ -47,8 +50,8 @@ logger = logging.getLogger(__name__)
 ChatbotNode = Callable[..., dict[str, list[AnyMessage]]]
 
 _NO_DOCUMENT_REPLY = (
-    "You haven't uploaded any documents to this conversation yet. "
-    "Upload a PDF and then ask your question — I'll search it for you."
+    "There are no uploaded documents in this project yet. "
+    "Upload a PDF to the project, then ask your question — I'll search it for you."
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -122,9 +125,9 @@ def _tools_for_turn(
     if intent == Intent.GENERAL_CHAT:
         return []
     elif intent == Intent.PROGRESS:
-        return [t for t in tools if t.name == "get_study_progress"]
+        return [t for t in tools if t.name == "get_flashcard_learning_status"]
     else:
-        return [t for t in tools if t.name != "get_study_progress"]
+        return [t for t in tools if t.name != "get_flashcard_learning_status"]
 
 
 
@@ -181,7 +184,7 @@ def create_general_chat_node(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def create_document_qa_node(llm: BaseChatModel, rag_tool: BaseTool | None) -> ChatbotNode:
-    """Node for DOCUMENT_QA intent: binds only the RAG tool."""
+    """Node for DOCUMENT_QA intent: binds only the RAG tool and ensures retrieval is executed."""
 
     bound = _safe_bind_tool(llm, rag_tool)
 
@@ -190,9 +193,32 @@ def create_document_qa_node(llm: BaseChatModel, rag_tool: BaseTool | None) -> Ch
         logger.info("document_qa: binding search_uploaded_documents")
         response = _invoke_and_log(
             bound,
-            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + _trim_history(messages),
+            [SystemMessage(content=DOCUMENT_QA_SYSTEM_PROMPT)] + _trim_history(messages),
             "document_qa",
         )
+
+        # Fail-safe: If the LLM did not emit a tool call, force a tool call to search_uploaded_documents
+        # so RAG retrieval and relevance verification are NEVER bypassed for document QA.
+        if (not getattr(response, "tool_calls", None)) and rag_tool is not None:
+            last_human = next((m for m in reversed(messages) if isinstance(m, HumanMessage)), None)
+            search_query = str(last_human.content).strip() if last_human else ""
+            if search_query:
+                import uuid
+                call_id = f"call_{uuid.uuid4().hex[:8]}"
+                logger.info(
+                    "document_qa: forcing fallback tool call to search_uploaded_documents for %r",
+                    search_query[:60],
+                )
+                response = AIMessage(
+                    content="",
+                    tool_calls=[{
+                        "name": "search_uploaded_documents",
+                        "args": {"query": search_query},
+                        "id": call_id,
+                        "type": "tool_call",
+                    }],
+                )
+
         return {"messages": [response]}
 
     return document_qa
@@ -265,21 +291,30 @@ def create_study_plan_node(llm: BaseChatModel, study_plan_tool: BaseTool | None)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Progress — binds get_study_progress only
+# Learning status — reads project flashcards only
 # ─────────────────────────────────────────────────────────────────────────────
 
 def create_progress_node(llm: BaseChatModel, progress_tool: BaseTool | None) -> ChatbotNode:
-    """Node for PROGRESS intent: binds only the study-progress tool."""
+    """Answer learning-status questions from current-project flashcards."""
 
     bound = _safe_bind_tool(llm, progress_tool)
 
     def progress(state: AgentState, config: RunnableConfig) -> dict[str, list[AnyMessage]]:
         messages = state.get("messages", [])
-        logger.info("progress: binding get_study_progress")
-        response = _invoke_and_log(
-            bound,
-            [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + _trim_history(messages),
-            "progress",
+        last_human = next((m for m in reversed(messages) if isinstance(m, HumanMessage)), None)
+        question = str(last_human.content).lower() if last_human else ""
+        status = "need_review" if re.search(r"need\s+review|review\b", question) else "still_learning"
+        logger.info("flashcard_status: forcing project flashcard lookup status=%s", status)
+        response = AIMessage(
+            content="",
+            tool_calls=[{
+                "name": "get_flashcard_learning_status",
+                "args": {"status": status},
+                "id": f"call_{uuid.uuid4().hex[:8]}",
+                "type": "tool_call",
+            }],
+        ) if progress_tool is not None else _invoke_and_log(
+            bound, [SystemMessage(content=CHATBOT_SYSTEM_PROMPT)] + _trim_history(messages), "flashcard_status"
         )
         return {"messages": [response]}
 
@@ -311,8 +346,30 @@ def create_synthesis_node(llm: BaseChatModel) -> ChatbotNode:
 
     def synthesis(state: AgentState, config: RunnableConfig) -> dict[str, list[AnyMessage]]:
         intent = state.get("intent", "document_qa")
-        system_prompt = _SYNTHESIS_PROMPT_MAP.get(intent, GROUNDED_ANSWER_SYSTEM_PROMPT)
         messages = state.get("messages", [])
+
+        # PRD §7: Check if the last tool executed returned an insufficient_evidence artifact
+        for msg in reversed(messages):
+            if isinstance(msg, ToolMessage):
+                artifact = getattr(msg, "artifact", None)
+                if isinstance(artifact, dict) and artifact.get("status") in ("insufficient_evidence", "no_documents"):
+                    logger.info("synthesis: detected %s artifact; skipping LLM synthesis", artifact.get("status"))
+                    refusal_text = (
+                        "> ⚠️ **Insufficient Evidence in Project Documents**\n\n"
+                        "I couldn't find enough relevant information in your study materials to answer this question.\n\n"
+                        "*Suggested action:* Try rephrasing your question or upload relevant study materials to this project."
+                    )
+                    return {
+                        "messages": [
+                            AIMessage(
+                                content=refusal_text,
+                                response_metadata={"response_type": "insufficient_evidence"},
+                            )
+                        ]
+                    }
+                break
+
+        system_prompt = _SYNTHESIS_PROMPT_MAP.get(intent, GROUNDED_ANSWER_SYSTEM_PROMPT)
         logger.info("synthesis: intent=%s, composing final answer", intent)
         response = _invoke_and_log(
             no_tool,

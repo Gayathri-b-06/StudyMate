@@ -10,7 +10,9 @@ from langchain_core.tools import BaseTool, tool
 
 from app.agent.graph import create_graph
 from app.api.chat import router as chat_router
+from app.db.session import init_db
 from app.services.chat_service import ChatService
+from scripts.migrate_spaces_projects import DEFAULT_PROJECT_ID
 
 
 class ToolFailureThenRetryGraph:
@@ -81,13 +83,17 @@ def test_chat_service_retries_with_bound_tools_after_groq_tool_use_failure() -> 
 
 def test_chat_endpoint_returns_service_response() -> None:
     """The endpoint delegates to the injected application chat service."""
+    init_db()
     app = FastAPI()
     app.state.chat_service = ChatService(
         create_graph(FakeListChatModel(responses=["Endpoint response"]))
     )
     app.include_router(chat_router)
 
-    response = TestClient(app).post("/chat", json={"message": "What is DNA?"})
+    response = TestClient(app).post(
+        "/chat",
+        json={"message": "What is DNA?", "project_id": DEFAULT_PROJECT_ID},
+    )
 
     assert response.status_code == 200
     assert response.json()["message"] == "Endpoint response"
@@ -97,6 +103,7 @@ def test_chat_endpoint_returns_service_response() -> None:
 
 def test_chat_endpoint_returns_deduplicated_sources_when_tool_used() -> None:
     """The endpoint returns deduplicated document citations when retrieval tool is used."""
+    init_db()
     @tool
     def search_uploaded_documents(query: str) -> str:
         """Search uploaded documents in the active thread."""
@@ -110,9 +117,9 @@ def test_chat_endpoint_returns_deduplicated_sources_when_tool_used() -> None:
     model = ToolCapableFakeChatModel(responses=[
         AIMessage(
             content="",
-            tool_calls=[{"name": "search_uploaded_documents", "args": {"query": "ML"}, "id": "call-1"}],
+            tool_calls=[{"name": "search_uploaded_documents", "args": {"query": "What is machine learning?"}, "id": "call-1"}],
         ),
-        AIMessage(content="According to MachineLearning.pdf, ML is... [[cite:1]]"),
+        AIMessage(content="According to MachineLearning.pdf, ML is... [[cite:1]] [[cite:2]]"),
     ])
 
     app = FastAPI()
@@ -121,12 +128,18 @@ def test_chat_endpoint_returns_deduplicated_sources_when_tool_used() -> None:
     )
     app.include_router(chat_router)
 
-    response = TestClient(app).post("/chat", json={"message": "What is ML?"})
+    response = TestClient(app).post(
+        "/chat",
+        json={"message": "What is machine learning according to the text?", "project_id": DEFAULT_PROJECT_ID},
+    )
 
     assert response.status_code == 200
     json_data = response.json()
     assert json_data["message"] == "According to MachineLearning.pdf, ML is..."
-    assert json_data["sources"] == [{"document": "MachineLearning.pdf", "page": 101}]
+    assert json_data["sources"] == [
+        {"document": "MachineLearning.pdf", "page": 101},
+        {"document": "MachineLearning.pdf", "page": 104},
+    ]
 
 
 def test_chat_service_suppresses_sources_for_unsupported_document_question() -> None:

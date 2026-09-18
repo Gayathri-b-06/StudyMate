@@ -10,10 +10,15 @@ export class ApiError extends Error {
 
 export async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData
+  const token = (() => {
+    try { return JSON.parse(localStorage.getItem('studymate_auth_session'))?.token }
+    catch { return null }
+  })()
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   })
@@ -40,8 +45,80 @@ export async function request(path, options = {}) {
   return payload
 }
 
-export function getThreads() {
-  return request('/threads')
+// ---------------------------------------------------------------------------
+// Spaces
+// ---------------------------------------------------------------------------
+
+export function getSpaces(includeArchived = false) {
+  const qs = includeArchived ? '?include_archived=true' : ''
+  return request(`/spaces${qs}`)
+}
+
+export function getSpace(spaceId) {
+  return request(`/spaces/${encodeURIComponent(spaceId)}`)
+}
+
+export function createSpace(name, description = null) {
+  return request('/spaces', {
+    method: 'POST',
+    body: JSON.stringify({ name, description }),
+  })
+}
+
+export function updateSpace(spaceId, patch) {
+  return request(`/spaces/${encodeURIComponent(spaceId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
+export function deleteSpace(spaceId) {
+  return request(`/spaces/${encodeURIComponent(spaceId)}`, { method: 'DELETE' })
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+export function getProjects(spaceId, includeArchived = false) {
+  const qs = includeArchived ? '?include_archived=true' : ''
+  return request(`/spaces/${encodeURIComponent(spaceId)}/projects${qs}`)
+}
+
+/**
+ * Create a project inside a space.
+ * Response includes `default_thread_id` — the auto-created conversation thread.
+ */
+export function createProject(spaceId, name, description = null) {
+  return request(`/spaces/${encodeURIComponent(spaceId)}/projects`, {
+    method: 'POST',
+    body: JSON.stringify({ name, description }),
+  })
+}
+
+export function getProject(projectId) {
+  return request(`/projects/${encodeURIComponent(projectId)}`)
+}
+
+export function updateProject(projectId, patch) {
+  return request(`/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
+export function deleteProject(projectId) {
+  return request(`/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' })
+}
+
+// ---------------------------------------------------------------------------
+// Threads  (project_id is REQUIRED — no unscoped fallback)
+// ---------------------------------------------------------------------------
+
+/** @param {string} projectId - REQUIRED. Returns 422 if absent. */
+export function getThreads(projectId) {
+  if (!projectId) throw new Error('getThreads requires a projectId')
+  return request(`/threads?project_id=${encodeURIComponent(projectId)}`)
 }
 
 export function getThreadMessages(threadId) {
@@ -59,15 +136,36 @@ export function removeThread(threadId) {
   return request(`/threads/${encodeURIComponent(threadId)}`, { method: 'DELETE' })
 }
 
-export function sendChatMessage(message, threadId) {
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {string} message
+ * @param {string} projectId - REQUIRED for server-side isolation
+ * @param {string|null} threadId - Optional, null creates a new thread
+ */
+export function sendChatMessage(message, projectId, threadId = null) {
   return request('/chat', {
     method: 'POST',
-    body: JSON.stringify({ message, ...(threadId ? { thread_id: threadId } : {}) }),
+    body: JSON.stringify({
+      message,
+      project_id: projectId,
+      ...(threadId ? { thread_id: threadId } : {}),
+    }),
   })
 }
 
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+
 export function getDocuments(threadId) {
   return request(`/threads/${encodeURIComponent(threadId)}/documents`)
+}
+
+export function getProjectDocuments(projectId) {
+  return request(`/projects/${encodeURIComponent(projectId)}/documents`)
 }
 
 export function uploadDocuments(threadId, files) {
@@ -79,9 +177,23 @@ export function uploadDocuments(threadId, files) {
   })
 }
 
+export function uploadProjectDocuments(projectId, files) {
+  const formData = new FormData()
+  files.forEach((file) => formData.append('files', file))
+  return request(`/projects/${encodeURIComponent(projectId)}/documents/upload`, { method: 'POST', body: formData })
+}
+
 export function removeDocument(documentId) {
   return request(`/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' })
 }
+
+export function getDocumentStatus(documentId) {
+  return request(`/documents/${encodeURIComponent(documentId)}/status`)
+}
+
+// ---------------------------------------------------------------------------
+// Study Log / Progress
+// ---------------------------------------------------------------------------
 
 export function getStudyLog(threadId) {
   return request(`/threads/${encodeURIComponent(threadId)}/study-log`)
@@ -97,4 +209,22 @@ export function queryRag(payload) {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+}
+
+export function getProjectMastery(projectId) {
+  if (!projectId) return Promise.resolve({ project_id: '', concepts: [] })
+  return request(`/projects/${encodeURIComponent(projectId)}/mastery`)
+}
+
+export function getProjectRecommendations(projectId) {
+  if (!projectId) return Promise.resolve({ project_id: '', recommendations: [] })
+  return request(`/projects/${encodeURIComponent(projectId)}/recommendations`)
+}
+
+// ---------------------------------------------------------------------------
+// Global Analytics & Dashboard
+// ---------------------------------------------------------------------------
+
+export function getGlobalDashboard(full = false) {
+  return request(`/analytics/global${full ? '?full=true' : ''}`)
 }

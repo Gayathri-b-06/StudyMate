@@ -351,13 +351,18 @@ def _hybrid_candidates(
     dense_weight: float,
     metadata_filter: Optional[Mapping[str, Any]],
 ) -> List[Tuple[Document, float]]:
-    """Metadata-aware reciprocal-rank fusion without rebuilding BM25 per query."""
+    """Metadata-aware reciprocal-rank fusion with concurrent dense + BM25 retrieval."""
     bm25 = _bm25_for(save_path, metadata_filter)
     if bm25 is None:
         return []
     bm25.k = candidate_k
-    bm25_docs = bm25.invoke(query)
-    dense = _dense_candidates(query, vectorstore, candidate_k, metadata_filter)
+
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future_bm25 = executor.submit(bm25.invoke, query)
+        future_dense = executor.submit(_dense_candidates, query, vectorstore, candidate_k, metadata_filter)
+        bm25_docs = future_bm25.result()
+        dense = future_dense.result()
 
     fused: dict[str, list[Any]] = {}
     rrf_constant = 60
@@ -517,18 +522,25 @@ def retrieve(
         results.sort(key=lambda item: item.relevance_score or 0.0, reverse=True)
         results = results[:k]
     else:
-        documents = [document for document, _ in candidate_pairs]
-        base_scores = {_document_key(document): score for document, score in candidate_pairs}
-        reranked = rerank(query, documents, top_k=len(documents))
+        # Cap candidate pairs sent to cross-encoder to preserve quality while reducing CPU inference
+        max_rerank_candidates = max(rerank_top_k * 2, 10)
+        top_candidate_pairs = candidate_pairs[:max_rerank_candidates]
+        documents = [document for document, _ in top_candidate_pairs]
+        base_scores = {_document_key(document): score for document, score in top_candidate_pairs}
+        reranked = rerank(query, documents, top_k=min(rerank_top_k, len(documents)))
         results = []
         for document, raw_rerank_score in reranked:
-            relevance = min(1.0, _sigmoid(float(raw_rerank_score)) + _metadata_boost(
+            score_val = float(raw_rerank_score)
+            # If the score is already in [0.0, 1.0] (e.g. cross-encoder probabilities), use it directly.
+            # Only apply sigmoid if the score is outside [0.0, 1.0] (unactivated raw logits).
+            base_relevance = score_val if 0.0 <= score_val <= 1.0 else _sigmoid(score_val)
+            relevance = min(1.0, base_relevance + _metadata_boost(
                 document, metadata_preferences, metadata_boost_weight
             ))
             if min_relevance_score is not None and relevance < min_relevance_score:
                 continue
             result = _as_retrieved(document, base_scores[_document_key(document)], "reranker_sigmoid")
-            result.rerank_score = float(raw_rerank_score)
+            result.rerank_score = score_val
             result.relevance_score = relevance
             results.append(result)
         results.sort(key=lambda item: item.relevance_score or 0.0, reverse=True)

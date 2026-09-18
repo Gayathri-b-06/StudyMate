@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from uuid import uuid4
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -18,14 +17,34 @@ class ThreadNotFoundError(LookupError):
     """Raised when a requested StudyMate thread does not exist."""
 
 
+class ProjectNotFoundForThreadError(LookupError):
+    """Raised when a thread operation references an absent project."""
+
+
 class ThreadService:
     """Create, validate, title, and rename database-backed chat threads."""
 
-    def resolve_thread(self, db: Session, thread_id: str | None) -> Thread:
-        """Return an existing thread or create a new default-titled thread."""
+    def resolve_thread(self, db: Session, thread_id: str | None, project_id: str) -> Thread:
+        """Return an existing thread or create a new default-titled thread under the project.
+
+        Parameters
+        ----------
+        thread_id  : Existing thread UUID, or None to create a fresh one.
+        project_id : The Project this thread belongs to (required — enforces isolation).
+
+        Raises
+        ------
+        ProjectNotFoundForThreadError : If project_id does not reference an existing project.
+        ThreadNotFoundError           : If thread_id is given but does not exist.
+        """
+        if crud.get_project(db, project_id) is None:
+            raise ProjectNotFoundForThreadError(
+                f"Project {project_id!r} does not exist."
+            )
+
         if thread_id is None:
             return crud.create_thread(
-                db, thread_id=str(uuid4()), title=DEFAULT_THREAD_TITLE
+                db, thread_id=str(uuid4()), title=DEFAULT_THREAD_TITLE, project_id=project_id
             )
 
         thread = crud.get_thread(db, thread_id)
@@ -38,16 +57,14 @@ class ThreadService:
         normalized_title = " ".join(title.split())
         if not normalized_title:
             raise ValueError("Thread title must contain non-whitespace characters.")
-        thread = crud.update_thread_title(
-            db, thread_id=thread_id, title=normalized_title
-        )
+        thread = crud.update_thread_title(db, thread_id=thread_id, title=normalized_title)
         if thread is None:
             raise ThreadNotFoundError(f"Thread {thread_id!r} does not exist.")
         return thread
 
-    def list_threads(self, db: Session) -> list[Thread]:
-        """Return all persisted threads ordered by latest update."""
-        return crud.list_threads(db)
+    def list_threads(self, db: Session, project_id: str) -> list[Thread]:
+        """Return persisted threads for a project ordered by latest update."""
+        return crud.list_threads(db, project_id)
 
     def study_log(self, db: Session, thread_id: str):
         """Return study activity for an existing thread."""

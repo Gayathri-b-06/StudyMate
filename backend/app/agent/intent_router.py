@@ -168,12 +168,22 @@ _DOC_DEPENDENT_INTENTS = {Intent.DOCUMENT_QA, Intent.QUIZ, Intent.FLASHCARD, Int
 # Classification helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+_STUDY_TERM_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"\b(?:dropout|regulariz|overfit|neural|algorithm|dataset|hyperparameter|architecture|loss\s+function|gradient|backprop|layer|epoch|activation|paper|theorem|derivation|formula|chapter|section|equation|experiment)\w*\b",
+        re.IGNORECASE,
+    ),
+)
+
+
 def classify_intent(text: str) -> Intent:
     """Return the highest-priority intent for *text* using regex matching only.
 
     Priority: PROGRESS > QUIZ > FLASHCARD > STUDY_PLAN > GENERAL_CHAT > DOCUMENT_QA
 
-    DOCUMENT_QA is the DEFAULT.  GENERAL_CHAT fires on a positive whitelist match.
+    DOCUMENT_QA is the DEFAULT. GENERAL_CHAT fires on a positive whitelist match,
+    unless the query contains technical/study concepts which must be evaluated against
+    uploaded document evidence.
     """
     # 1. PROGRESS — highest priority
     if any(p.search(text) for p in _PROGRESS_PATTERNS):
@@ -195,10 +205,12 @@ def classify_intent(text: str) -> Intent:
         logger.debug("classify_intent: STUDY_PLAN matched for %r", text[:60])
         return Intent.STUDY_PLAN
 
-    # 5. GENERAL_CHAT (whitelist)
+    # 5. GENERAL_CHAT (whitelist) — bypass prevented if study terminology is detected
     if any(p.search(text) for p in _GENERAL_CHAT_PATTERNS):
-        logger.debug("classify_intent: GENERAL_CHAT matched for %r", text[:60])
-        return Intent.GENERAL_CHAT
+        if not any(sp.search(text) for sp in _STUDY_TERM_PATTERNS):
+            logger.debug("classify_intent: GENERAL_CHAT matched for %r", text[:60])
+            return Intent.GENERAL_CHAT
+        logger.debug("classify_intent: study terms override GENERAL_CHAT → DOCUMENT_QA for %r", text[:60])
 
     # 6. DEFAULT → DOCUMENT_QA
     logger.debug("classify_intent: DOCUMENT_QA (default) for %r", text[:60])

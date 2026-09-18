@@ -84,7 +84,7 @@ function CircularProgress({ value = 0, size = 48, strokeWidth = 4 }) {
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(255, 255, 255, 0.08)"
+          stroke="#E2E8F0"
           strokeWidth={strokeWidth}
           fill="transparent"
         />
@@ -92,7 +92,7 @@ function CircularProgress({ value = 0, size = 48, strokeWidth = 4 }) {
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="url(#gradientRing)"
+          stroke="#059669"
           strokeWidth={strokeWidth}
           fill="transparent"
           strokeDasharray={circumference}
@@ -100,14 +100,8 @@ function CircularProgress({ value = 0, size = 48, strokeWidth = 4 }) {
           strokeLinecap="round"
           className="transition-all duration-500 ease-out"
         />
-        <defs>
-          <linearGradient id="gradientRing" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#8B5CF6" />
-            <stop offset="100%" stopColor="#3B82F6" />
-          </linearGradient>
-        </defs>
       </svg>
-      <span className="absolute font-mono-numbers text-[11px] font-bold text-white">
+      <span className="absolute font-mono-numbers text-[11px] font-bold text-slate-800">
         {Math.round(value)}%
       </span>
     </div>
@@ -121,6 +115,7 @@ export default function FlashcardsWorkspace({
   onFlashcardsUpdate,
   documents = [],
   threadId,
+  projectId = null,
 }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
@@ -185,7 +180,7 @@ export default function FlashcardsWorkspace({
         particleCount: 80,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ['#8B5CF6', '#3B82F6', '#10B981'],
+        colors: ['#059669', '#10B981', '#34D399', '#F59E0B'],
       })
     }
   }, [totalRated, hasCards, cards.length])
@@ -223,9 +218,9 @@ export default function FlashcardsWorkspace({
 
       // Log progress to backend
       const docId = activeDeck?.document_id || (documents[0]?.id ?? '')
-      const cardStatus = isMastered ? 'known' : 'learning'
+      const cardStatus = isMastered ? 'known' : rating
       if (docId) {
-        void reportFlashcardResult(docId, topic, [{ front: term, status: cardStatus }]).catch(() => {})
+        void reportFlashcardResult(projectId, docId, topic, [{ front: term, back: currentCard.back ?? currentCard.definition ?? currentCard.answer ?? '', status: cardStatus }]).catch(() => {})
       }
 
       setCardRatings((prev) => ({
@@ -287,12 +282,12 @@ export default function FlashcardsWorkspace({
   // Setup Form View
   if (!activeDeck || !hasCards || showSetupForm) {
     return (
-      <div className="space-y-4 max-w-xl mx-auto p-4 animate-fade-in font-sans">
+      <div className="study-setup space-y-4 max-w-xl mx-auto p-4 animate-fade-in font-sans">
         {showSetupForm && activeDeck && (
           <button
             type="button"
             onClick={() => setShowSetupForm(false)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:text-white transition-colors mb-2"
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-emerald-700 transition-colors mb-2 cursor-pointer"
           >
             <ChevronLeftIcon />
             <span>Back to current deck</span>
@@ -300,7 +295,7 @@ export default function FlashcardsWorkspace({
         )}
 
         {error && (
-          <p className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-3 text-xs text-[var(--danger)]">
+          <p className="rounded-xl border border-rose-200 bg-rose-50/70 p-3 text-xs text-rose-700 font-medium">
             {error}
           </p>
         )}
@@ -325,17 +320,17 @@ export default function FlashcardsWorkspace({
   const formulaText = currentCard?.formula ?? null
 
   return (
-    <div className="flex flex-col items-center gap-6 p-6 max-w-3xl mx-auto animate-fade-in text-[var(--text-primary)] font-sans">
+    <div className="study-flashcards flex flex-col items-center gap-6 p-6 max-w-3xl mx-auto animate-fade-in text-slate-800 font-sans">
       {/* ── Gamification Header Bar ───────────────────────────────── */}
-      <div className="w-full max-w-[520px] rounded-3xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl shadow-xl space-y-3">
+      <div className="study-deck-header w-full max-w-[540px] rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <CircularProgress value={completionPercentage} size={44} strokeWidth={4} />
             <div>
-              <h2 className="text-base font-bold text-white capitalize truncate max-w-[200px]">
+              <h2 className="font-heading text-base font-bold text-slate-900 capitalize truncate max-w-[220px]">
                 {topicName}
               </h2>
-              <p className="text-[11px] text-[var(--text-muted)] font-medium">
+              <p className="text-[11px] text-slate-500 font-medium">
                 {totalRated} of {cards.length} cards reviewed
               </p>
             </div>
@@ -343,17 +338,17 @@ export default function FlashcardsWorkspace({
 
           <div className="flex items-center gap-2">
             {/* XP Badge */}
-            <span className="flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-mono-numbers font-bold text-amber-300">
+            <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-mono-numbers font-bold text-emerald-800">
               ⚡ {xp} XP
             </span>
             {/* Streak Badge */}
-            <span className="hidden sm:flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-mono-numbers font-bold text-violet-300">
+            <span className="hidden sm:flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-mono-numbers font-bold text-amber-800">
               🔥 3 Day Streak
             </span>
             <button
               type="button"
               onClick={() => setShowSetupForm(true)}
-              className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] hover:border-white/20 hover:text-white transition"
+              className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 transition cursor-pointer shadow-2xs"
               title="New Flashcard Deck"
             >
               <PlusIcon />
@@ -367,18 +362,18 @@ export default function FlashcardsWorkspace({
       <div className="flex items-center justify-center gap-4 w-full">
         {/* Prev Button */}
         <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.95 }}
           type="button"
           onClick={handlePrev}
-          className="grid size-11 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:bg-white/[0.08] hover:text-white shrink-0 focus-visible shadow-lg"
+          className="grid size-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-emerald-400 hover:bg-emerald-50/40 hover:text-emerald-700 shrink-0 shadow-xs cursor-pointer"
           aria-label="Previous card"
         >
           <ChevronLeftIcon />
         </motion.button>
 
         {/* Card Motion Slide Container */}
-        <div className="w-full max-w-[520px]">
+        <div className="w-full max-w-[540px]">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentIndex}
@@ -398,53 +393,57 @@ export default function FlashcardsWorkspace({
               >
                 <div className="flip-inner">
                   {/* ── Front Face ──────────────────────────────────────── */}
-                  <div className="face flex flex-col justify-between p-6">
-                    <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-3">
-                      <IndexTab variant="accent">{cardTag}</IndexTab>
-                      <span className="text-[10px] font-mono-numbers font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-white/10 bg-white/5 text-[var(--text-secondary)]">
+                  <div className="face flex flex-col justify-between p-7">
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                      <span className="badge-mint">{cardTag}</span>
+                      <span className="text-[10px] font-mono-numbers font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
                         {difficulty}
                       </span>
                     </div>
 
-
-                    <div className="my-auto py-4 space-y-3 text-center">
-                      <p className="text-xl font-bold leading-relaxed text-white tracking-tight">
+                    <div className="my-auto py-4 space-y-3 text-center max-h-[210px] overflow-y-auto">
+                      <p className="font-heading text-xl font-bold leading-relaxed text-slate-900 tracking-tight break-words">
                         {termText}
                       </p>
                       {exampleText && (
-                        <p className="text-xs text-[var(--text-secondary)] italic max-w-md mx-auto">
+                        <p className="font-body text-xs text-slate-500 italic max-w-md mx-auto break-words">
                           e.g. {exampleText}
                         </p>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-center gap-1.5 text-xs text-[var(--text-muted)] pt-3 border-t border-white/5">
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 pt-3 border-t border-slate-100">
                       <FlipIcon />
                       <span>Tap to reveal answer</span>
                     </div>
                   </div>
 
                   {/* ── Back Face ───────────────────────────────────────── */}
-                  <div className="face face-back flex flex-col justify-between p-6">
-                    <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-3">
-                      <IndexTab variant="warning">Detailed Answer</IndexTab>
-                      <span className="font-mono-numbers text-xs text-[var(--accent)] font-semibold">
+                  <div className="face face-back flex flex-col justify-between p-7">
+                    <div className="flex items-center justify-between gap-2 border-b border-emerald-100 pb-3">
+                      <span className="badge-amber">Detailed Answer</span>
+                      <span className="font-mono-numbers text-xs text-emerald-700 font-semibold">
                         Card {currentIndex + 1}/{cards.length}
                       </span>
                     </div>
 
                     <div className="my-auto py-3 overflow-y-auto max-h-[200px] space-y-3 pr-1">
-                      <p className="text-sm leading-relaxed text-[var(--text-primary)]">
+                      <p className="font-body text-sm leading-relaxed text-slate-800 break-words">
                         {definitionText}
                       </p>
                       {formulaText && (
-                        <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-2.5 text-xs font-mono-numbers text-blue-300">
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-2.5 text-xs font-mono-numbers text-emerald-900 break-all">
                           Formula: {formulaText}
                         </div>
                       )}
+                      {hintText && (
+                        <p className="text-xs text-slate-500 italic">
+                          💡 Tip: {hintText}
+                        </p>
+                      )}
                     </div>
 
-                    <div className="flex items-center justify-center gap-1.5 text-xs text-[var(--text-muted)] pt-3 border-t border-white/5">
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 pt-3 border-t border-emerald-100">
                       <FlipIcon />
                       <span>Tap to flip back</span>
                     </div>
@@ -457,11 +456,11 @@ export default function FlashcardsWorkspace({
 
         {/* Next Button */}
         <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.95 }}
           type="button"
           onClick={handleNext}
-          className="grid size-11 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:bg-white/[0.08] hover:text-white shrink-0 focus-visible shadow-lg"
+          className="grid size-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-emerald-400 hover:bg-emerald-50/40 hover:text-emerald-700 shrink-0 shadow-xs cursor-pointer"
           aria-label="Next card"
         >
           <ChevronRightIcon />
@@ -469,16 +468,16 @@ export default function FlashcardsWorkspace({
       </div>
 
       {/* ── 3 Interactive Recall Action Buttons ───────────────────── */}
-      <div className="grid grid-cols-3 gap-3 w-full max-w-[520px]">
+      <div className="grid grid-cols-3 gap-3 w-full max-w-[540px]">
         <motion.button
-          whileHover={{ scale: 1.03, y: -1 }}
-          whileTap={{ scale: 0.96 }}
+          whileHover={{ scale: 1.02, y: -1 }}
+          whileTap={{ scale: 0.98 }}
           type="button"
           onClick={() => handleRateCard('still_learning')}
-          className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-xs font-bold transition-all shadow-md focus-visible ${
+          className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs transition-all shadow-xs cursor-pointer ${
             cardRatings[currentIndex] === 'still_learning'
-              ? 'border-[var(--warning)] bg-[var(--warning-soft)] text-[var(--warning)] ring-2 ring-[var(--warning)]/50'
-              : 'border-[var(--warning)]/30 bg-[#141420] text-[var(--warning)] hover:bg-[var(--warning-soft)]'
+              ? 'border-2 border-slate-400 bg-slate-100 text-slate-900 font-bold'
+              : 'border border-slate-200 bg-white text-slate-700 font-semibold hover:bg-slate-50'
           }`}
         >
           <ClockIcon />
@@ -486,14 +485,14 @@ export default function FlashcardsWorkspace({
         </motion.button>
 
         <motion.button
-          whileHover={{ scale: 1.03, y: -1 }}
-          whileTap={{ scale: 0.96 }}
+          whileHover={{ scale: 1.02, y: -1 }}
+          whileTap={{ scale: 0.98 }}
           type="button"
           onClick={() => handleRateCard('need_review')}
-          className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-xs font-bold transition-all shadow-md focus-visible ${
+          className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs transition-all shadow-xs cursor-pointer ${
             cardRatings[currentIndex] === 'need_review'
-              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)] ring-2 ring-[var(--accent)]/50'
-              : 'border-[var(--accent)]/30 bg-[#141420] text-[var(--accent)] hover:bg-[var(--accent-soft)]'
+              ? 'border-2 border-amber-400 bg-amber-50 text-amber-900 font-bold'
+              : 'border border-slate-200 bg-white text-amber-700 font-semibold hover:bg-amber-50/50'
           }`}
         >
           <RefreshCwIcon />
@@ -501,14 +500,14 @@ export default function FlashcardsWorkspace({
         </motion.button>
 
         <motion.button
-          whileHover={{ scale: 1.03, y: -1 }}
-          whileTap={{ scale: 0.96 }}
+          whileHover={{ scale: 1.02, y: -1 }}
+          whileTap={{ scale: 0.98 }}
           type="button"
           onClick={() => handleRateCard('got_it')}
-          className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-xs font-bold transition-all shadow-md focus-visible ${
+          className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs transition-all shadow-xs cursor-pointer ${
             cardRatings[currentIndex] === 'got_it'
-              ? 'border-[var(--success)] bg-[var(--success-soft)] text-[var(--success)] ring-2 ring-[var(--success)]/50'
-              : 'border-[var(--success)]/30 bg-[#141420] text-[var(--success)] hover:bg-[var(--success-soft)]'
+              ? 'bg-emerald-700 text-white font-bold border border-emerald-700'
+              : 'bg-emerald-600 text-white font-bold hover:bg-emerald-700 border border-emerald-600'
           }`}
         >
           <CheckIcon />
@@ -517,17 +516,17 @@ export default function FlashcardsWorkspace({
       </div>
 
       {/* ── Footer Stats ──────────────────────────────────────────── */}
-      <div className="flex items-center justify-center gap-6 text-xs text-[var(--text-muted)] font-mono-numbers">
-        <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-[var(--success)]" />
+      <div className="flex items-center justify-center gap-6 text-xs text-slate-600 font-mono-numbers">
+        <span className="flex items-center gap-1.5 font-semibold text-emerald-700">
+          <span className="size-2 rounded-full bg-emerald-500" />
           <span>{gotItCount} Mastered</span>
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-[var(--accent)]" />
+        <span className="flex items-center gap-1.5 text-amber-700 font-medium">
+          <span className="size-2 rounded-full bg-amber-400" />
           <span>{needReviewCount} Need Review</span>
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-[var(--warning)]" />
+        <span className="flex items-center gap-1.5 text-slate-500">
+          <span className="size-2 rounded-full bg-slate-300" />
           <span>{stillLearningCount} Still Learning</span>
         </span>
       </div>

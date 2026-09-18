@@ -1,202 +1,123 @@
-# StudyMate — Contextual AI Study Workspace
+# StudyMate
 
-StudyMate is a modern, high-performance AI study workspace that transforms course material PDFs into an interactive, document-grounded learning environment. Built to feel like a premium AI application (Linear, Notion, Perplexity UI quality), it enables students to ask grounded questions with page-level citations, generate multiple-choice quizzes, study 3D flip flashcards, schedule exam prep plans, and track study progress over time.
+StudyMate is a PDF-grounded AI study companion built with React, FastAPI and LangGraph. Organize learning into **Spaces → Projects**, chat with source citations, generate quizzes and flashcards, create study plans, and track mastery, growth and recommendations. The desktop interface uses sage backgrounds, cream cards and forest-green navigation.
 
-The application is built using **FastAPI**, **LangGraph**, **React 19**, **Vite**, **Framer Motion**, and a hybrid RAG pipeline (**FAISS + BM25 + Cross-Encoder reranking**).
+The top-level pages are **Home, Spaces, Global Analytics and Admin**. Each project contains Overview, AI Tutor, Documents, Quiz, Flashcards, Analytics and Study Plan.
 
----
+See [architecture and decisions](PROJECT_ARCHITECTURE.md), including the authentication boundary and remaining deployment requirements.
 
-## 🎬 Project Preview
+## Local setup
 
-![StudyMate Demo](studymate.gif)
+Use Python 3.12 and Node.js **20.19+ or 22.12+** (the installed Vite 8 engine requirement). Keep enough disk space and memory for PyTorch, FAISS and two CPU transformer models. The initial model download needs network access; cached embedding/reranking inference runs locally. Answer generation still needs Groq network access.
 
----
+From the repository root, in PowerShell:
 
-## 🌟 Key Features
-
-### 🎨 Premium Design System & UI/UX (Linear / Perplexity Quality)
-- **Deep Dark Theme (`#09090F`)**: Floating glassmorphism surfaces, soft violet (`#8B5CF6`) & blue accent gradients, dynamic animations.
-- **Framer Motion Animations**: Smooth workspace tab switching, floating question cards, quiz option check & shake animations.
-- **Minimal TopBar Header**: Sticky breadcrumb bar displaying active tool status and thread context.
-
-### 📚 Contextual Workspace Modules
-
-#### 1. 🎴 Flashcards Workspace
-- **Fixed-Width 3D Card Flip**: 3D rotation flip with solid face colors (`#12121c`) and anti-aliased font rendering (100% crisp text, no subpixel blur).
-- **Gamified Study Metrics**: Circular SVG progress ring, XP counter, study streak tracker, and 3 recall buttons (*Got It*, *Learning*, *Review Later*).
-- **Celebration Blast**: Custom canvas-confetti animation trigger upon deck completion.
-
-#### 2. 📝 Quiz Workspace
-- **Document-Grounded Questions**: Generates 4-option MCQs with real RAG source citations (`[Filename, Page X]`).
-- **Interactive Option Feedback**: Instant green check animation for correct options and red shake animation (`x: [-10, 10, -8, 8, 0]`) for wrong options.
-- **Expanding Explanations**: Collapsible detailed rationale displaying exact source PDF evidence.
-
-#### 3. 🎯 "Quiz Me on This" Contextual Workflow (Single-Click Execution)
-- **One-Click Execution**: Clicking *"Quiz Me on This"* on any weak topic in Study Progress automatically opens the Quiz workspace, pre-fills the topic, auto-selects the source PDF, and presents the weak topic banner.
-- **Multi-PDF & Resilience**: Handles multi-PDF threads with source selectors and provides graceful fallbacks for deleted documents.
-
-#### 4. 📅 Study Plan Workspace
-- **Day-by-Day Schedules**: Generates multi-day revision timelines grounded in PDF topics.
-- **Task Checklist & Track**: Interactive task checkboxes with a dynamic percentage progress track and topic action shortcuts (*Practice Quiz →*, *Study Flashcards →*).
-
-#### 5. 📈 Study Progress Workspace
-- **Structured Performance Tracking**: Displays accuracy percentages, attempted quizzes, and automatically identified weak topics across sessions.
-
-### 🧠 Backend AI & Architecture
-- **Deterministic Intent Routing**: Pure-Python regex classification that routes queries before LLM tool binding to prevent model function-calling failures. Supports general conversational chat and general-knowledge discussion queries.
-- **Hybrid RAG Pipeline**: Combines FAISS dense vector search, BM25 lexical keyword matching, and Cross-Encoder reranking (`ms-marco-MiniLM-L-6-v2`).
-- **Single Source of Truth Context**: State management via `WorkspaceContext.jsx` for zero data-loss transitions.
-- **Streaming Responses**: Real-time message streaming over Server-Sent Events (SSE).
-
----
-
-## 🏗️ Architecture
-
-```mermaid
-flowchart TD
-    User([User]) --> Frontend[React 19 Frontend / Framer Motion]
-    Frontend --> API[FastAPI /chat Endpoint]
-    API --> Router[Intent Router Node]
-    
-    Router -->|GENERAL_CHAT| General[general_chat Node]
-    Router -->|DOCUMENT_QA| DocQA[document_qa Node]
-    Router -->|QUIZ| Quiz[quiz Node]
-    Router -->|FLASHCARD| Flash[flashcard Node]
-    Router -->|STUDY_PLAN| Plan[study_plan Node]
-    Router -->|PROGRESS| Prog[progress Node]
-    Router -->|NO_DOCUMENT| NoDoc[no_document Node]
-
-    DocQA --> ToolNode[LangGraph ToolNode]
-    Quiz --> ToolNode
-    Flash --> ToolNode
-    Plan --> ToolNode
-    Prog --> ToolNode
-
-    ToolNode --> HybridRAG[Hybrid RAG / FAISS + BM25 + Reranker]
-    ToolNode --> DB[(SQLite DB / SQLAlchemy ORM)]
-
-    ToolNode --> Synthesis[synthesis Node]
-    General --> Response[LLM Response]
-    Synthesis --> Response
-    Response --> SSE[SSE Stream]
-    SSE --> Frontend
-```
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Technologies |
-|---|---|
-| **Frontend** | React 19, Vite, Tailwind CSS, Framer Motion, Canvas-Confetti, Lucide Icons |
-| **Backend** | Python 3.12, FastAPI, Uvicorn, Pydantic v2 |
-| **AI & Orchestration** | LangGraph, LangChain Core, Groq API (`llama-3.3-70b-versatile`) |
-| **RAG Pipeline** | FAISS, BM25 (`langchain_community`), Cross-Encoder (`ms-marco-MiniLM-L-6-v2`) |
-| **Database** | SQLite (WAL Mode) via SQLAlchemy 2.0 ORM |
-| **Streaming** | Server-Sent Events (SSE) via `StreamingResponse` |
-| **Testing** | Pytest (166 unit & integration tests) |
-
----
-
-## 📂 Project Structure
-
-```text
-StudyMate/
-├── backend/
-│   ├── app/
-│   │   ├── agent/       # LangGraph state machine, nodes, and intent router
-│   │   ├── api/         # FastAPI router endpoints and dependencies
-│   │   ├── db/          # SQLAlchemy ORM models, session setup, and CRUD operations
-│   │   ├── rag/         # Document ingestion, FAISS/BM25 retrieval, and reranking
-│   │   ├── schemas/     # Pydantic request and response schemas
-│   │   ├── services/    # Business logic services for chat, threads, and documents
-│   │   ├── tools/       # LangChain tools for RAG, memory, quiz, flashcards, and plans
-│   │   └── main.py      # FastAPI application entrypoint and lifespan context
-│   └── tests/           # Pytest unit and regression test suite (166 tests)
-├── frontend/
-│   ├── src/
-│   │   ├── api/         # REST API fetch helpers
-│   │   ├── components/  # Floating sidebar, TopBar, and workspace router
-│   │   │   └── workspace/ # Flashcards, Quiz, Planner, and Progress workspace components
-│   │   ├── context/     # WorkspaceContext single source of truth state
-│   │   ├── lib/         # SSE stream reader and API consumers
-│   │   └── App.jsx      # Root application shell
-│   └── vite.config.js   # Vite dev server and proxy configuration
-├── PROJECT_ARCHITECTURE.md   # Full technical specification document
-└── STUDYMATE_PROJECT_OVERVIEW.md # Comprehensive academic project overview
-```
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Python 3.12+
-- Node.js 18+
-
-### Backend Setup
-
-```bash
+```powershell
 cd backend
 python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
-
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-### Frontend Setup
+On macOS/Linux use `source .venv/bin/activate` and `cp .env.example .env` instead. Edit `backend/.env` before starting. Never put backend keys in frontend environment variables.
 
-```bash
+Required for the AI services:
+
+- `GROQ_API_KEY`: chat and document-answer generation.
+- `GROQ_MODEL`: chat model identifier; the current local setup uses `openai/gpt-oss-20b`. Choose a model available to your Groq account.
+- `GROQ_QUIZ_API_KEY`: required by the dedicated study-tool client. You can supply the same Groq key, but this variable must be set explicitly.
+- `GROQ_QUIZ_MODEL`: optional; falls back to `GROQ_MODEL`.
+
+Local retrieval defaults (no NVIDIA key needed):
+
+- `EMBEDDING_PROVIDER=local`.
+- `EMBEDDING_MODEL=BAAI/bge-small-en-v1.5`.
+- `EMBEDDING_BATCH_SIZE=32`.
+- `RERANKER_MODEL=BAAI/bge-reranker-base`.
+
+Additional configuration:
+
+- `STUDYMATE_SECRET_KEY`: set a private, random value for quiz-grading signatures. The code has an insecure development fallback; do not use that fallback for a deployment. Generate a value with `python -c "import secrets; print(secrets.token_hex(32))"` and store it only in your local environment/secret manager.
+- `DATABASE_URL`: optional. The default resolves to `backend/chatbot.db` regardless of the shell directory. Leave it unset for ordinary local use. LangGraph independently stores conversation checkpoints in `backend/langgraph_checkpoints.db`.
+- `LANGCHAIN_TRACING_V2`, `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT`: optional LangSmith integration; these are the names read by the Admin telemetry adapter. Leave tracing disabled unless wanted. Tracing can send conversation/document content to that service.
+- `GROQ_GENERATOR_API_KEY`, `GROQ_JUDGE_API_KEY`: optional evaluation-only keys; each falls back to `GROQ_API_KEY`.
+
+The optional legacy hosted embedding implementation remains in the source for compatibility/testing. It is **not** the default or a setup requirement. Changing embedding models invalidates index compatibility: startup rebuilds from recoverable chunks or asks for a PDF re-upload when recovery is impossible.
+
+Start the backend from `backend/`:
+
+```powershell
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Open [API documentation](http://127.0.0.1:8000/docs). Account routes become available before model startup finishes. AI endpoints return 503 while models initialize or if startup fails; inspect the backend terminal for configuration/model errors.
+
+In a second terminal, from the repository root:
+
+```powershell
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-### Environment Variables
+Open [StudyMate](http://localhost:5173). Vite proxies `/api/*` to the backend and removes `/api`. No frontend `.env` is required locally. `VITE_API_BASE_URL` is the optional build-time API prefix; keep `/api` when using the same-origin proxy arrangement.
 
-Create a `.env` file in the `backend/` directory:
+## First run and evaluator data
 
-```env
-GROQ_API_KEY=gsk_...
-GROQ_QUIZ_API_KEY=gsk_...
-GROQ_MODEL=llama-3.3-70b-versatile
-DATABASE_URL=sqlite:///backend/chatbot.db
-```
+A fresh database is supported: startup creates tables and performs applicable legacy migrations. Sign up to create a student account, then log in. Fresh installs do not provision a demo account or administrator. Existing default/demo accounts and their old sessions cannot authenticate. Provision administrators only through trusted backend administration of the user record; signup never grants that role.
 
----
+A fresh clone does **not** require the developer's SQLite database. Create a Space, create a Project, and upload a PDF through Documents. Wait until indexing is ready, then use the study tools. Analytics populate from real interactions; there is no seed of realistic course content or assessment history. Legacy migrations can create Default Space/Default Project to preserve older records; this is not a populated evaluator dataset.
 
-## 🧪 Testing
+Existing local databases and generated indexes were preserved during cleanup. Do not distribute them as a demo seed: they may contain learner content or session records. If a populated evaluator demo is desired, prepare a separate sanitized dataset explicitly.
 
-StudyMate includes an automated Pytest regression test suite covering intent routing, hybrid retrieval, memory persistence, and tool execution.
+## Checks and evaluation
 
-To run the backend test suite:
+From `frontend/`:
 
-```bash
-cd backend
-.venv\Scripts\python.exe -m pytest tests/ -v
-```
-
-**Result**: 166 passed (100% success rate).
-
-To verify the frontend build:
-
-```bash
-cd frontend
+```powershell
+npm test
 npm run build
 ```
 
----
+The build creates `frontend/dist/`, which is ignored. From `backend/`, run pytest against a disposable database, not the database containing your study history. Some integration tests initialize or modify the configured database; external-model/manual tests also require additional resources. A focused example:
 
-## 📜 License
+```powershell
+python -m pytest tests/test_auth_boundary.py tests/test_auth_startup.py tests/test_thread_history_access.py -q -p no:cacheprovider
+```
 
-This project is licensed under the [MIT License](LICENSE).
+There is no fixed claimed passing-test count: results depend on the selected suite and environment.
 
----
+The offline RAGAS harness uses a local PDF and its corresponding question/reference dataset:
 
-## 👨‍💻 Author
+```powershell
+python -m eval.run_eval --hybrid --pdf C:/path/to/course.pdf --dataset C:/path/to/matching_eval_dataset.yaml
+```
 
-- **GitHub**: [Gayathri-b-06](https://github.com/Gayathri-b-06)
+Use a PDF that matches the dataset; the default `sample.pdf` is not guaranteed to exist in a fresh checkout. The harness writes evaluation CSVs in `backend/eval/`. It evaluates faithfulness, answer relevancy, context precision and context recall, with a separate adversarial path. It makes hosted LLM calls and is not a free, offline unit test. Admin reads saved CSV output rather than running evaluation on every page load.
+
+## Maintenance scripts
+
+Keep schema migrations in `backend/scripts/` as upgrade tooling, not throwaway debugging:
+
+- `migrate_spaces_projects.py`: legacy hierarchy migration and validation.
+- `migrate_add_concept_mastery.py`: mastery tables/upgrade support.
+- `migrate_add_index_status.py`: legacy document-index status column.
+- `migrate_user_memories_reason.py`: historical reason-column backfill and deduplication; makes a backup.
+- `cleanup_legacy_weak_memory.py`: deletes old weak-topic facts unsupported by quiz evidence. Retained for old installations, **not** a general cleanup command for current data.
+
+Back up the database before any manual migration. The named calibration/benchmark scripts are absent from this working tree; this pass did not delete them or recreate undocumented tooling.
+
+## Deployment status and requirements
+
+**No deployment has been performed.** Protected endpoints now require a valid server-issued session; missing, malformed, revoked or unrecognized Bearer credentials return 401. Only login/signup and API documentation are public; `/auth/me` and logout require authentication. Admin authorization reads the backend user role, never client role headers. The default/demo login fallback is removed. Password hashing still uses salted SHA-256 rather than a password-specific adaptive KDF; harden password storage and supply a private grading-signature key before exposing the API. See the requirements below for remaining deployment work.
+
+After those blockers are addressed, the current architecture calls for:
+
+1. Build the frontend with `npm ci` and `npm run build`; serve `dist/` with SPA route fallback.
+2. Run FastAPI without `--reload`, initially as one process, and reverse-proxy `/api/*` to it with the prefix removed. Preserve SSE streaming (disable buffering and allow sufficiently long requests).
+3. Terminate HTTPS at the proxy. The code has no general cross-origin CORS configuration, so use a same-origin frontend/API unless you explicitly implement and review CORS.
+4. Persist SQLite, LangGraph checkpoints and `backend/vectorstores/`; these cannot live only on an ephemeral filesystem. Provision a model cache and CPU memory. Back up databases consistently, including SQLite WAL state, rather than copying an active database file alone.
+5. Configure secrets on the server, not in Git or a frontend bundle. `backend/.env` is loaded with `override=True`, so do not bake a development `.env` into a deployment image.
+
+No Docker, cloud platform, production URL, or automatic deployment is implied by these instructions. PostgreSQL is not a verified drop-in deployment: startup includes SQLite-specific migrations and LangGraph still uses a separate SQLite checkpointer.

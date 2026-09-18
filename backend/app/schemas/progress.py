@@ -7,15 +7,18 @@ class QuizQuestionResult(BaseModel):
     correct: bool
 
 class QuizResultReport(BaseModel):
+    project_id: str
     document_id: str
     topic: str
     results: list[QuizQuestionResult] = Field(min_length=1)
 
 class FlashcardStatusResult(BaseModel):
     front: str
-    status: Literal["known", "learning"]
+    back: str | None = None
+    status: Literal["known", "still_learning", "need_review"]
 
 class FlashcardResultReport(BaseModel):
+    project_id: str
     document_id: str
     topic: str
     cards: list[FlashcardStatusResult]

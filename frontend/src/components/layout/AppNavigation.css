@@ -1,0 +1,49 @@
+.app-navigation { --app-sidebar-width: 224px; min-height: 100dvh; }
+.app-navigation.nav-collapsed { --app-sidebar-width: 76px; }
+.app-route-content { margin-left: var(--app-sidebar-width); min-width: 0; transition: margin-left .2s; }
+.app-sidebar { width: var(--app-sidebar-width); position: fixed; inset: 0 auto 0 0; z-index: 45; display: flex; flex-direction: column; padding: 26px 16px; color: #f5faef; background: linear-gradient(180deg,#103f30f5 0%,#133f31f0 57%,#143e3090 85%),url('../../assets/dashboard-study-room.png') 77% bottom / auto 80% no-repeat; font-family: 'DM Sans','Segoe UI',sans-serif; overflow-x: hidden; overflow-y: auto; transition: width .2s; }
+.app-nav-brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; padding: 0 6px 20px; border-bottom: 1px solid #ffffff16; flex-shrink: 0; }
+.app-nav-brand > span { display: grid; place-items: center; width: 43px; height: 43px; flex-shrink: 0; border-radius: 50%; background: #488e6d; }
+.app-nav-brand svg { width: 28px; height: 28px; stroke-width: 1.6; }
+.app-nav-brand strong { font-size: 20px; font-weight: 700; letter-spacing: -.5px; white-space: nowrap; }
+.app-nav-brand small { display: block; font-size: 9px; letter-spacing: .45px; white-space: nowrap; }
+.app-sidebar-toggle { display: grid; place-items: center; align-self: flex-end; width: 34px; height: 32px; margin: 10px 0 6px; border-radius: 8px; color: #d6e7cf; background: #ffffff0c; border: 1px solid #ffffff16; cursor: pointer; flex-shrink: 0; }
+.app-sidebar-toggle svg { width: 19px; height: 19px; }
+.app-sidebar nav { display: grid; gap: 6px; }
+.app-sidebar nav a { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: 10px; color: #e4eee0; text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap; transition: background .15s; }
+.app-sidebar nav svg { width: 22px; height: 22px; stroke-width: 1.7; flex-shrink: 0; }
+.app-sidebar nav a.active, .app-sidebar nav a:hover { background: #286e51cc; color: white; }
+.app-sidebar-note { margin-top: auto; padding: 45px 18px 180px; color: #d5e4ce; font-size: 15px; line-height: 1.55; }
+.app-sidebar-note svg { color: #91b278; margin-bottom: 10px; }
+.nav-collapsed .app-sidebar { padding: 26px 10px; }
+.nav-collapsed .app-nav-brand { padding: 0 6px 20px; }
+.nav-collapsed .app-nav-brand > div, .nav-collapsed .app-sidebar nav span, .nav-collapsed .app-sidebar-note { display: none; }
+.nav-collapsed .app-sidebar-toggle { align-self: center; }
+.nav-collapsed .app-sidebar nav a { padding: 13px; justify-content: center; }
+.app-mobile-toggle, .app-mobile-close, .app-nav-backdrop { display: none; }
+.app-sidebar :is(a,button):focus-visible, .app-mobile-toggle:focus-visible { outline: 2px solid #a7d2a2; outline-offset: 3px; }
+/* Page content no longer reserves its own independent sidebar. */
+.app-route-content .desk-main { margin-left: 0; }
+.app-route-content .spaces-page { padding-left: 0; }
+.app-global-header { display: flex; align-items: center; justify-content: flex-end; height: 72px; padding: 12px 32px; position: relative; z-index: 40; border: 0; background: #fbfdf3a0; }
+.app-global-header > div { width: 100%; display: flex; justify-content: flex-end; }
+@media (max-width: 700px) {
+  .app-navigation, .app-navigation.nav-collapsed { --app-sidebar-width: 224px; }
+  .app-route-content { margin-left: 0; }
+  .app-sidebar { transform: translateX(-100%); transition: transform .2s; }
+  .app-mobile-toggle { position: absolute; top: 18px; left: 16px; z-index: 44; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; border: 1px solid #c7dcc0; background: #f8fbed; color: #22583d; cursor: pointer; }
+  .app-mobile-toggle svg { width: 21px; height: 21px; }
+  .nav-mobile-open .app-sidebar { transform: translateX(0); }
+  .app-nav-backdrop { display: block; position: fixed; inset: 0; background: #0e352878; border: 0; z-index: 44; }
+  .app-sidebar-toggle { display: none; }
+  .app-mobile-close { display: grid; place-items: center; align-self: flex-end; color: #dcebd4; background: transparent; border: 0; padding: 10px; cursor: pointer; }
+  .nav-collapsed .app-sidebar { padding: 26px 16px; }
+  .nav-collapsed .app-nav-brand > div, .nav-collapsed .app-sidebar nav span, .nav-collapsed .app-sidebar-note { display: block; }
+  .nav-collapsed .app-sidebar nav a { justify-content: flex-start; padding: 13px 16px; }
+  .app-global-header { padding: 12px 16px 12px 60px; }
+}
+@media (prefers-reduced-motion: reduce) { .app-sidebar, .app-route-content { transition: none; } }
+@media (max-width: 700px) {
+  .app-sidebar { visibility: hidden; pointer-events: none; }
+  .nav-mobile-open .app-sidebar { visibility: visible; pointer-events: auto; }
+}

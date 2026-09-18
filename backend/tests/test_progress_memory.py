@@ -20,12 +20,18 @@ from app.agent.graph import create_graph
 from app.agent.nodes.chatbot import _tools_for_turn
 from app.config import DEFAULT_USER_ID
 from app.db import crud
-from app.db.models import Base, MemoryFactType
+from app.db.models import Base, MemoryFactType, Project, Space
 from app.db.session import get_db
 from app.schemas.chat import ChatRequest
 from app.tools import memory_tool
 from app.services.chat_service import ChatService
 from app.services.thread_service import ThreadService
+from scripts.migrate_spaces_projects import (
+    DEFAULT_PROJECT_ID,
+    DEFAULT_PROJECT_NAME,
+    DEFAULT_SPACE_ID,
+    DEFAULT_SPACE_NAME,
+)
 
 
 class ToolCapableFakeChatModel(FakeMessagesListChatModel):
@@ -42,6 +48,11 @@ def _session_factory() -> sessionmaker[Session]:
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add(Space(id=DEFAULT_SPACE_ID, name=DEFAULT_SPACE_NAME))
+        db.flush()
+        db.add(Project(id=DEFAULT_PROJECT_ID, space_id=DEFAULT_SPACE_ID, name=DEFAULT_PROJECT_NAME))
+        db.commit()
     return sessionmaker(bind=engine, expire_on_commit=False)
 
 
@@ -66,6 +77,7 @@ def test_quiz_result_persists_attempt_and_derives_weak_topic_below_sixty_percent
     response = _progress_client(session_factory).post(
         "/progress/quiz-result",
         json={
+            "project_id": DEFAULT_PROJECT_ID,
             "document_id": "document-1",
             "topic": "linear regression",
             "results": [
@@ -77,9 +89,9 @@ def test_quiz_result_persists_attempt_and_derives_weak_topic_below_sixty_percent
 
     assert response.status_code == 204
     with session_factory() as db:
-        attempts = crud.get_quiz_attempts(db, DEFAULT_USER_ID)
+        attempts = crud.get_quiz_attempts(db, DEFAULT_USER_ID, DEFAULT_PROJECT_ID)
         weak_topics = crud.get_user_memory(
-            db, DEFAULT_USER_ID, fact_type=MemoryFactType.WEAK_TOPIC
+            db, DEFAULT_USER_ID, project_id=DEFAULT_PROJECT_ID, fact_type=MemoryFactType.WEAK_TOPIC
         )
 
     assert [(attempt.topic, attempt.correct_count, attempt.total_questions) for attempt in attempts] == [
@@ -96,6 +108,7 @@ def test_passing_quiz_is_logged_without_a_weak_topic_fact() -> None:
     response = _progress_client(session_factory).post(
         "/progress/quiz-result",
         json={
+            "project_id": DEFAULT_PROJECT_ID,
             "document_id": "document-2",
             "topic": "probability",
             "results": [
@@ -107,9 +120,9 @@ def test_passing_quiz_is_logged_without_a_weak_topic_fact() -> None:
 
     assert response.status_code == 204
     with session_factory() as db:
-        attempts = crud.get_quiz_attempts(db, DEFAULT_USER_ID)
+        attempts = crud.get_quiz_attempts(db, DEFAULT_USER_ID, DEFAULT_PROJECT_ID)
         weak_topics = crud.get_user_memory(
-            db, DEFAULT_USER_ID, fact_type=MemoryFactType.WEAK_TOPIC
+            db, DEFAULT_USER_ID, project_id=DEFAULT_PROJECT_ID, fact_type=MemoryFactType.WEAK_TOPIC
         )
 
     assert len(attempts) == 1
@@ -120,7 +133,7 @@ def test_study_progress_returns_only_recorded_structured_data(monkeypatch) -> No
     """Empty lists remain empty and a completed quiz appears without inference."""
     session_factory = _session_factory()
     with session_factory() as db:
-        assert memory_tool.get_study_progress(db, DEFAULT_USER_ID) == {
+        assert memory_tool.get_study_progress(db, DEFAULT_USER_ID, DEFAULT_PROJECT_ID) == {
             "quiz_attempts": [],
             "weak_topics": [],
             "studied_topics": [],
@@ -128,6 +141,7 @@ def test_study_progress_returns_only_recorded_structured_data(monkeypatch) -> No
         crud.create_quiz_attempt(
             db,
             user_id=DEFAULT_USER_ID,
+            project_id=DEFAULT_PROJECT_ID,
             document_id="document-3",
             topic="backpropagation",
             correct_count=2,
@@ -136,12 +150,13 @@ def test_study_progress_returns_only_recorded_structured_data(monkeypatch) -> No
         memory_tool.record_weak_topic(
             db,
             DEFAULT_USER_ID,
+            DEFAULT_PROJECT_ID,
             "backpropagation",
             "scored 2/5 on backpropagation",
             "document-3",
         )
 
-        data = memory_tool.get_study_progress(db, DEFAULT_USER_ID)
+        data = memory_tool.get_study_progress(db, DEFAULT_USER_ID, DEFAULT_PROJECT_ID)
 
     assert data["quiz_attempts"][0]["topic"] == "backpropagation"
     assert data["quiz_attempts"][0]["score"] == "2/5"
@@ -149,7 +164,7 @@ def test_study_progress_returns_only_recorded_structured_data(monkeypatch) -> No
     assert data["studied_topics"] == []
 
     monkeypatch.setattr(memory_tool, "SessionLocal", session_factory)
-    tool = memory_tool.create_study_progress_tool()
+    tool = memory_tool.create_study_progress_tool(DEFAULT_PROJECT_ID)
     assert tool.args_schema.model_json_schema()["properties"] == {}
     assert tool.invoke({}) == data
 
@@ -161,6 +176,7 @@ def test_progress_tool_answers_from_recorded_attempts_without_retrieval(monkeypa
         crud.create_quiz_attempt(
             db,
             user_id=DEFAULT_USER_ID,
+            project_id=DEFAULT_PROJECT_ID,
             document_id="document-4",
             topic="calculus",
             correct_count=3,
@@ -169,13 +185,14 @@ def test_progress_tool_answers_from_recorded_attempts_without_retrieval(monkeypa
         memory_tool.record_weak_topic(
             db,
             DEFAULT_USER_ID,
+            DEFAULT_PROJECT_ID,
             "calculus",
             "scored 3/7 on calculus",
             "document-4",
         )
 
     monkeypatch.setattr(memory_tool, "SessionLocal", session_factory)
-    progress_tool = memory_tool.create_study_progress_tool()
+    progress_tool = memory_tool.create_study_progress_tool(DEFAULT_PROJECT_ID)
     model = ToolCapableFakeChatModel(
         responses=[
             AIMessage(
@@ -205,7 +222,7 @@ def test_small_talk_has_no_tools_available(message: str, monkeypatch) -> None:
     """Greetings must not be able to invoke progress or any other agent tool."""
     session_factory = _session_factory()
     monkeypatch.setattr(memory_tool, "SessionLocal", session_factory)
-    progress_tool = memory_tool.create_study_progress_tool()
+    progress_tool = memory_tool.create_study_progress_tool(DEFAULT_PROJECT_ID)
 
     @tool
     def search_uploaded_documents(query: str) -> str:
@@ -221,7 +238,7 @@ def test_non_progress_question_cannot_call_progress_tool(monkeypatch) -> None:
     """Only clear performance phrasing makes the progress tool available."""
     session_factory = _session_factory()
     monkeypatch.setattr(memory_tool, "SessionLocal", session_factory)
-    progress_tool = memory_tool.create_study_progress_tool()
+    progress_tool = memory_tool.create_study_progress_tool(DEFAULT_PROJECT_ID)
 
     @tool
     def search_uploaded_documents(query: str) -> str:
@@ -253,7 +270,7 @@ def test_explicit_progress_question_keeps_progress_tool_available(
     """Natural performance phrasings must not diverge from the prompt policy."""
     session_factory = _session_factory()
     monkeypatch.setattr(memory_tool, "SessionLocal", session_factory)
-    progress_tool = memory_tool.create_study_progress_tool()
+    progress_tool = memory_tool.create_study_progress_tool(DEFAULT_PROJECT_ID)
 
     tool_names = [
         item.name
@@ -266,7 +283,7 @@ def test_tool_completion_keeps_progress_schema_available(monkeypatch) -> None:
     """Groq can validate the prior tool call while the final answer is generated."""
     session_factory = _session_factory()
     monkeypatch.setattr(memory_tool, "SessionLocal", session_factory)
-    progress_tool = memory_tool.create_study_progress_tool()
+    progress_tool = memory_tool.create_study_progress_tool(DEFAULT_PROJECT_ID)
 
     tool_names = [
         item.name
@@ -284,6 +301,7 @@ def test_flashcard_learning_tag_creates_weak_topic_fact() -> None:
     response = _progress_client(session_factory).post(
         "/progress/flashcard-result",
         json={
+            "project_id": DEFAULT_PROJECT_ID,
             "document_id": "document-5",
             "topic": "decision trees",
             "cards": [
@@ -296,7 +314,7 @@ def test_flashcard_learning_tag_creates_weak_topic_fact() -> None:
     assert response.status_code == 204
     with session_factory() as db:
         weak_topics = crud.get_user_memory(
-            db, DEFAULT_USER_ID, fact_type=MemoryFactType.WEAK_TOPIC
+            db, DEFAULT_USER_ID, project_id=DEFAULT_PROJECT_ID, fact_type=MemoryFactType.WEAK_TOPIC
         )
     assert [fact.detail for fact in weak_topics] == [
         "marked 1 cards as still learning on decision trees"
@@ -321,7 +339,7 @@ def test_tool_validation_failure_returns_a_graceful_chat_message() -> None:
 
     with session_factory() as db:
         response = send_chat_message(
-            ChatRequest(message="Which topics am I weak at?"),
+            ChatRequest(message="Which topics am I weak at?", project_id=DEFAULT_PROJECT_ID),
             FailingChatService(),  # type: ignore[arg-type]
             ThreadService(),
             db,

@@ -43,9 +43,26 @@ def _get_model() -> CrossEncoder:
         # where multiple threads pass the first check simultaneously.
         if _RERANKER_MODEL is None:
             logger.info(f"Lazy-loading reranker model: {MODEL_NAME}")
-            _RERANKER_MODEL = CrossEncoder(MODEL_NAME)
+            import torch
+            num_cpus = os.cpu_count() or 4
+            if torch.get_num_threads() < num_cpus:
+                torch.set_num_threads(num_cpus)
+            try:
+                _RERANKER_MODEL = CrossEncoder(MODEL_NAME, device="cpu", local_files_only=True)
+            except Exception:
+                _RERANKER_MODEL = CrossEncoder(MODEL_NAME, device="cpu")
             
     return _RERANKER_MODEL
+
+
+def warmup_reranker() -> None:
+    """Pre-load cross-encoder model weights into memory at application startup."""
+    try:
+        model = _get_model()
+        model.predict([["warmup query", "warmup text"]])
+        logger.info("Reranker model %s pre-warmed successfully.", MODEL_NAME)
+    except Exception as exc:
+        logger.warning("Reranker pre-warming failed: %s", exc)
 
 
 @traceable(run_type="chain", name="cross_encoder_rerank")

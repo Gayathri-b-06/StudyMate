@@ -1,6 +1,14 @@
-import { MessageSquare, FileText, HelpCircle, Layers, TrendingUp, Calendar } from 'lucide-react'
+import { LayoutDashboard, MessageSquare, FileText, HelpCircle, Layers, TrendingUp, Calendar } from 'lucide-react'
 
 export const WORKSPACES = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    title: 'Project Overview',
+    shortName: 'Overview',
+    icon: LayoutDashboard,
+    description: 'Project Dashboard & Quick Actions',
+  },
   {
     id: 'chat',
     label: 'Chat',

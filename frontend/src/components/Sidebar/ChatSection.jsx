@@ -53,7 +53,7 @@ export default function ChatSection({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 transition-colors shrink-0"
+        className="flex w-full items-center justify-between px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:text-black transition-colors shrink-0"
       >
         <span>Chats</span>
         <ChevronDown
@@ -70,24 +70,23 @@ export default function ChatSection({
         }`}
       >
         <div className="overflow-y-auto pr-1">
-          {isLoading && <p className="px-2 py-3 text-xs text-slate-500">Loading chats…</p>}
-          {error && <p className="px-2 py-3 text-xs text-rose-300">{error}</p>}
+          {isLoading && <p className="px-2 py-3 text-xs text-zinc-500">Loading chats…</p>}
+          {error && <p className="px-2 py-3 text-xs text-black bg-zinc-100 rounded-lg border border-black/15">{error}</p>}
 
           {!isLoading && !error && threads.length === 0 && (
-            <p className="px-2 py-3 text-xs leading-5 text-slate-500">Start a chat to create your first conversation.</p>
+            <p className="px-2 py-3 text-xs leading-5 text-zinc-500">Start a chat to create your first conversation.</p>
           )}
 
           {!isLoading && !error && threads.length > 0 && filteredThreads.length === 0 && (
-            <p className="px-2 py-3 text-xs leading-5 text-slate-500">No chats found matching "{searchQuery}".</p>
+            <p className="px-2 py-3 text-xs leading-5 text-zinc-500">No chats found matching "{searchQuery}".</p>
           )}
 
           <ul className="space-y-1">
             {filteredThreads.map((thread) => (
-
               <li key={thread.id} className="group">
                 {editingThreadId === thread.id ? (
                   <form
-                    className="flex gap-1 rounded-lg bg-slate-800 p-1"
+                    className="flex gap-1 rounded-lg bg-zinc-100 border border-zinc-300 p-1"
                     onSubmit={(event) => {
                       event.preventDefault()
                       void saveRename(thread.id)
@@ -103,16 +102,18 @@ export default function ChatSection({
                         }
                       }}
                       maxLength="200"
-                      className="min-w-0 flex-1 rounded bg-slate-900 px-2 py-1 text-xs text-white outline-none ring-violet-400 focus:ring-1"
+                      className="min-w-0 flex-1 rounded bg-white px-2 py-1 text-xs text-black border border-zinc-300 outline-none focus:border-black"
                     />
-                    <button type="submit" className="rounded px-2 text-[10px] font-medium text-violet-200 hover:bg-slate-700">
+                    <button type="submit" className="rounded px-2 text-[10px] font-bold text-black hover:bg-zinc-200">
                       Save
                     </button>
                   </form>
                 ) : (
                   <div
                     className={`flex items-center gap-1 rounded-lg px-2 py-1.5 transition ${
-                      activeThreadId === thread.id ? 'bg-slate-800 text-white font-medium' : 'text-slate-300 hover:bg-slate-800/60'
+                      activeThreadId === thread.id
+                        ? 'bg-zinc-100 text-black font-semibold border border-black/15 shadow-sm'
+                        : 'text-zinc-600 hover:bg-zinc-100 hover:text-black'
                     }`}
                   >
                     <button
@@ -122,13 +123,13 @@ export default function ChatSection({
                       className="min-w-0 flex-1 truncate text-left text-xs"
                     >
                       <span className="block truncate">{thread.title}</span>
-                      <span className="block text-[10px] text-slate-500">{formatUpdatedAt(thread.updated_at)}</span>
+                      <span className="block text-[10px] text-zinc-400 font-mono-numbers">{formatUpdatedAt(thread.updated_at)}</span>
                     </button>
                     <div className="hidden shrink-0 gap-1 group-hover:flex">
                       <button
                         type="button"
                         onClick={() => beginRename(thread)}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                        className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-black"
                         aria-label={`Rename ${thread.title}`}
                         title="Rename"
                       >
@@ -141,7 +142,7 @@ export default function ChatSection({
                             if (onDelete) void onDelete(thread.id)
                           }
                         }}
-                        className="rounded p-1 text-slate-400 hover:bg-rose-500/20 hover:text-rose-300"
+                        className="rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-black"
                         aria-label={`Delete ${thread.title}`}
                         title="Delete"
                       >

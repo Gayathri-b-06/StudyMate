@@ -15,6 +15,7 @@ from app.api.threads import router as thread_router
 from app.db.session import init_db
 from app.services.chat_service import ChatService
 from app.services.thread_service import ThreadService
+from scripts.migrate_spaces_projects import DEFAULT_PROJECT_ID
 
 
 def test_same_thread_id_restores_previous_messages() -> None:
@@ -111,13 +112,14 @@ def test_checkpoint_restores_conversation_after_restart() -> None:
 
 def test_chat_endpoint_returns_generated_thread_id() -> None:
     """The endpoint creates and returns a UUID when a request omits one."""
+    init_db()
     app = FastAPI()
     app.state.chat_service = ChatService(
         create_graph(FakeListChatModel(responses=["Endpoint response"]))
     )
     app.include_router(chat_router)
 
-    response = TestClient(app).post("/chat", json={"message": "Hello"})
+    response = TestClient(app).post("/chat", json={"message": "Hello", "project_id": DEFAULT_PROJECT_ID})
 
     assert response.status_code == 200
     assert response.json()["message"] == "Endpoint response"
@@ -148,7 +150,7 @@ def test_get_thread_messages_endpoint() -> None:
     assert non_existent.status_code == 404
 
     # 2. Send first chat message -> creates a thread and returns thread_id
-    chat1 = client.post("/chat", json={"message": "Hello StudyMate"})
+    chat1 = client.post("/chat", json={"message": "Hello StudyMate", "project_id": DEFAULT_PROJECT_ID})
     assert chat1.status_code == 200
     thread_id = chat1.json()["thread_id"]
 
@@ -157,11 +159,11 @@ def test_get_thread_messages_endpoint() -> None:
     assert res1.status_code == 200
     assert res1.json() == [
         {"role": "user", "content": "Hello StudyMate", "sources": []},
-        {"role": "assistant", "content": "First AI reply", "sources": []},
+        {"role": "assistant", "content": "First AI reply", "sources": [], "response_type": "grounded_answer"},
     ]
 
     # 4. Send second message in same thread
-    chat2 = client.post("/chat", json={"message": "What is Python?", "thread_id": thread_id})
+    chat2 = client.post("/chat", json={"message": "What is Python?", "thread_id": thread_id, "project_id": DEFAULT_PROJECT_ID})
     assert chat2.status_code == 200
 
     # 5. Verify full chronological history
@@ -169,9 +171,9 @@ def test_get_thread_messages_endpoint() -> None:
     assert res2.status_code == 200
     assert res2.json() == [
         {"role": "user", "content": "Hello StudyMate", "sources": []},
-        {"role": "assistant", "content": "First AI reply", "sources": []},
+        {"role": "assistant", "content": "First AI reply", "sources": [], "response_type": "grounded_answer"},
         {"role": "user", "content": "What is Python?", "sources": []},
-        {"role": "assistant", "content": "Second AI reply", "sources": []},
+        {"role": "assistant", "content": "Second AI reply", "sources": [], "response_type": "grounded_answer"},
     ]
 
     close_checkpointer(checkpointer)

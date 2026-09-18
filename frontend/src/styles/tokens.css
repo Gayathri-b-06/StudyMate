@@ -1,51 +1,121 @@
 :root {
-  /* Premium Dark Theme Canvas */
-  --bg: #09090f;
-  --surface-1: #11111a;   /* Floating Card Surface */
-  --surface-2: #181824;   /* Raised Surface / Hover State */
-  --surface-glass: rgba(17, 17, 26, 0.75);
-  
-  /* Borders */
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --border-glow: rgba(139, 92, 246, 0.35);
+  /* ── Core Emerald / Mint Academic Semantic Palette ────────── */
+  --color-brand-primary:   #059669;  /* Deep emerald (primary buttons, active tabs, highlights) */
+  --color-brand-hover:     #047857;  /* Emerald 700 hover */
+  --color-brand-active:    #065F46;  /* Emerald 800 active */
+  --color-brand-light:     #ECFDF5;  /* Soft pale mint background */
+  --color-brand-subtle:    #D1FAE5;  /* Mint 100 badge/accent */
+  --color-brand-border:    #A7F3D0;  /* Mint 200 border */
 
-  /* Text Hierarchy */
-  --text-primary: #f4f3f8;
-  --text-secondary: #a6a4b8;
-  --text-muted: #6e6c82;
+  /* ── Surface Hierarchy ────────────────────────────────────── */
+  --color-ink:             #F8FAF9;  /* Base canvas background: calm warm off-white */
+  --color-ink-ambient:     #F6FAF7;  /* Slightly mint-tinted canvas companion */
+  --color-panel:           #FFFFFF;  /* Cards, header, sidebars: crisp white */
+  --color-panel-raised:    #F1F5F3;  /* Elevated controls, hovered lists, subtle tabs */
+  --color-panel-mint:      #F0FDF4;  /* Accentuated card surface */
 
-  /* Brand Accents */
-  --accent: #8b5cf6;
-  --accent-strong: #7c3aed;
-  --accent-blue: #3b82f6;
-  --accent-soft: rgba(139, 92, 246, 0.16);
-  --accent-blue-soft: rgba(59, 130, 246, 0.16);
+  /* ── Typography Palette ───────────────────────────────────── */
+  --color-parchment:       #0F172A;  /* Primary text: deep charcoal navy (high contrast) */
+  --color-slate:           #475569;  /* Secondary text: slate 600 */
+  --color-muted:           #64748B;  /* Metadata / helper text: slate 500 */
+  --color-border:          #E2E8F0;  /* Clean hairline divider */
+  --color-border-subtle:   #E6ECE8;  /* Light mint-tinged border */
+  --color-border-strong:   #CBD5E1;  /* Slate 300 accentuated borders */
 
-  /* Semantic Feedback */
-  --success: #10b981;
-  --success-soft: rgba(16, 185, 129, 0.16);
-  --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.16);
-  --danger: #ef4444;
-  --danger-soft: rgba(239, 68, 68, 0.16);
+  /* ── Semantic System Aliases ──────────────────────────────── */
+  --bg:                    var(--color-ink);
+  --bg-ambient:            radial-gradient(1100px circle at 50% -280px, rgba(209, 250, 229, 0.48), transparent 62%), linear-gradient(145deg, var(--color-ink-ambient) 0%, var(--color-ink) 58%, #F7FAF8 100%);
+  --surface-1:             var(--color-panel);
+  --surface-2:             var(--color-panel-raised);
+  --surface-mint:          var(--color-brand-light);
+  --surface-glass:         rgba(255, 255, 255, 0.92);
 
-  /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
+  --border:                var(--color-border);
+  --border-strong:         var(--color-border-strong);
+  --border-brand:          var(--color-brand-border);
 
-  /* Shape & Radii */
-  --radius-card: 24px;
-  --radius-control: 14px;
+  --text-primary:          var(--color-parchment);
+  --text-secondary:        var(--color-slate);
+  --text-muted:            var(--color-muted);
 
-  /* Shadows & Glows */
-  --shadow-card: 0 20px 40px -15px rgba(0, 0, 0, 0.7), 0 0 20px -5px rgba(139, 92, 246, 0.15);
-  --glow-accent: 0 0 25px -5px rgba(139, 92, 246, 0.4);
+  --accent:                var(--color-brand-primary);
+  --accent-hover:          var(--color-brand-hover);
+  --accent-soft:           var(--color-brand-light);
+  --accent-border:         var(--color-brand-border);
+
+  /* ── Semantic State Colors (Restrained Pastels) ───────────── */
+  --success:               #059669;  /* Emerald */
+  --success-soft:          #ECFDF5;
+  --success-border:        #A7F3D0;
+
+  --warning:               #D97706;  /* Warm Amber */
+  --warning-soft:          #FEF3C7;
+  --warning-border:        #FDE68A;
+
+  --danger:                #DC2626;  /* Soft Coral / Rose */
+  --danger-soft:           #FEE2E2;
+  --danger-border:         #FECACA;
+
+  --info:                  #2563EB;  /* Muted Blue */
+  --info-soft:             #EFF6FF;
+  --info-border:           #BFDBFE;
+
+  /* ── Concept Mastery Tier Tokens (50% / 75% App-Wide Standard) ── */
+  --mastery-mastered-bg:      var(--color-brand-light);
+  --mastery-mastered-text:    var(--color-brand-active);
+  --mastery-mastered-border:  var(--color-brand-border);
+  --mastery-mastered-fill:    var(--color-brand-primary);
+
+  --mastery-developing-bg:    var(--warning-soft);
+  --mastery-developing-text:  #92400E;
+  --mastery-developing-border:var(--warning-border);
+  --mastery-developing-fill:  var(--warning);
+
+  --mastery-attention-bg:     var(--danger-soft);
+  --mastery-attention-text:   #991B1B;
+  --mastery-attention-border: var(--danger-border);
+  --mastery-attention-fill:   var(--danger);
+
+  /* ── Growth Chart Visual Tokens ──────────────────────────── */
+  --chart-grid-line:          #E2E8F0;
+  --chart-axis-text:          #94A3B8;
+  --chart-line-emerald:       var(--color-brand-primary);
+  --chart-line-amber:         var(--warning);
+  --chart-line-rose:          var(--danger);
+  --chart-line-blue:          var(--info);
+
+  /* ── Typography Families ─────────────────────────────────── */
+  --font-heading:          'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-body:             'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:             'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+  --font-sans:             var(--font-body);
+
+  /* ── Typography Scale (Academic Hierarchy) ───────────────── */
+  --text-2xs:              0.75rem;     /* 12px - micro badges, labels */
+  --text-xs:               0.84375rem;  /* 13.5px - secondary metadata */
+  --text-sm:               0.9375rem;   /* 15px - body text, buttons, nav */
+  --text-base:             1.0625rem;   /* 17px - prominent body, card headings */
+  --text-lg:               1.25rem;     /* 20px - subsection headers */
+  --text-xl:               1.4375rem;   /* 23px - section headings */
+  --text-2xl:              1.875rem;    /* 30px - page sub-headings */
+  --text-3xl:              2.25rem;     /* 36px - page titles, stats */
+  --text-4xl:              2.75rem;     /* 44px - display numbers */
+
+  /* ── Shape & Radii ───────────────────────────────────────── */
+  --radius-card:           16px;
+  --radius-control:        10px;
+  --radius-pill:           9999px;
+
+  /* ── Shadows (Soft & Natural) ────────────────────────────── */
+  --shadow-card:           0 2px 7px -3px rgba(15, 23, 42, 0.10), 0 1px 3px -1px rgba(15, 23, 42, 0.05);
+  --shadow-hover:          0 6px 16px -4px rgba(15, 23, 42, 0.12), 0 3px 8px -3px rgba(15, 23, 42, 0.06);
+  --shadow-brand:          0 4px 14px 0 rgba(5, 150, 105, 0.20);
+  --shadow-drawer:         -4px 0 24px 0 rgba(15, 23, 42, 0.08);
 }
 
 /* Global focus ring */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--color-brand-primary);
   outline-offset: 2px;
 }
 

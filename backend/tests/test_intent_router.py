@@ -255,3 +255,23 @@ def test_subject_questions_are_not_general_chat(query: str):
         f"Got: {intent}. Should be DOCUMENT_QA."
     )
     assert intent == Intent.DOCUMENT_QA
+
+
+@pytest.mark.parametrize("query", [
+    "Who was the author of the dropout paper?",
+    "When was dropout introduced in deep learning?",
+    "Where is dropout regularization applied during training?",
+    "Who proposed the Adam algorithm?",
+    "When was gradient descent first used in neural networks?",
+])
+def test_borderline_study_queries_prevent_general_chat_bypass(query: str):
+    """PRD §7: Borderline-phrased study questions (who/when/where) must route to DOCUMENT_QA.
+
+    This ensures they are evaluated against the document evidence threshold rather than
+    slipping past document search via GENERAL_CHAT regex matches.
+    """
+    intent = _cls(query)
+    assert intent == Intent.DOCUMENT_QA, (
+        f"Borderline study query {query!r} bypassed document search into {intent}. "
+        "Must be DOCUMENT_QA."
+    )
