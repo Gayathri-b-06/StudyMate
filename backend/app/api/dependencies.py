@@ -27,7 +27,20 @@ from app.services.thread_service import ThreadService
 
 
 def require_ai_ready(request: Request) -> None:
+    # Import here to avoid a circular import while app.main composes routers.
+    from app.main import ensure_ai_services
+
     ai_status = getattr(request.app.state, "ai_status", "ready")
+    if ai_status in {"cold", "initializing"}:
+        try:
+            ensure_ai_services(request.app)
+        except RuntimeError as error:
+            raise HTTPException(
+                status_code=503,
+                detail="Study tools could not start. Please check the backend logs.",
+                headers={"Retry-After": "5"},
+            ) from error
+        ai_status = getattr(request.app.state, "ai_status", "error")
     if ai_status != "ready":
         detail = (
             "Study tools are still starting. Please try again shortly."

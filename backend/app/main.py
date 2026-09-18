@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -50,9 +50,24 @@ from scripts.migrate_spaces_projects import DEFAULT_PROJECT_ID
 logger = logging.getLogger(__name__)
 
 
+def _get_ai_initialization_lock(app: FastAPI) -> threading.Lock:
+    """Return the one process-wide lock that guards heavyweight AI startup."""
+    lock = getattr(app.state, "ai_initialization_lock", None)
+    if lock is None:
+        lock = threading.Lock()
+        app.state.ai_initialization_lock = lock
+    return lock
+
+
 def initialize_ai_services(app: FastAPI, checkpointer) -> None:
-    """Load models and repair indexes without blocking authentication requests."""
+    """Compose heavyweight AI services on first study-tool request only.
+
+    Local embedding and reranker weights are intentionally not loaded during
+    web-process startup.  This keeps the HTTP server within small deployment
+    memory limits until a user actually invokes a RAG-backed feature.
+    """
     try:
+        logger.info("Initializing StudyMate AI services on demand (models are not pre-warmed).")
         embeddings = get_embeddings()
         logger.info(
             "Embeddings initialized: model=%s (dim=%d, batch_size=%d)",
@@ -88,14 +103,28 @@ def initialize_ai_services(app: FastAPI, checkpointer) -> None:
             tools=tools,
         )
 
-        # Pre-warm cross-encoder weights asynchronously so 1st query does not stall
-        import threading
-        from app.rag.reranker import warmup_reranker
-        threading.Thread(target=warmup_reranker, daemon=True, name="reranker-warmup").start()
+        # The cross-encoder stays lazy too: it is loaded only by the first
+        # retrieval that asks for reranking, then reused by its singleton cache.
         app.state.ai_status = "ready"
+        logger.info("StudyMate AI services ready; embedding/reranker indexes load on demand.")
     except Exception:
         app.state.ai_status = "error"
         logger.exception("AI initialization failed; authentication remains available")
+
+
+def ensure_ai_services(app: FastAPI) -> None:
+    """Initialize expensive AI dependencies exactly once when a study tool needs them."""
+    if getattr(app.state, "ai_status", "cold") == "ready":
+        return
+    with _get_ai_initialization_lock(app):
+        if getattr(app.state, "ai_status", "cold") == "ready":
+            return
+        if getattr(app.state, "ai_status", "cold") == "error":
+            raise RuntimeError("StudyMate AI services could not be initialized; see backend logs.")
+        app.state.ai_status = "initializing"
+        initialize_ai_services(app, app.state.checkpointer)
+        if app.state.ai_status != "ready":
+            raise RuntimeError("StudyMate AI services could not be initialized; see backend logs.")
 
 
 @asynccontextmanager
@@ -103,15 +132,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Make account routes available as soon as the database is ready."""
     init_db()
     checkpointer = create_checkpointer()
-    app.state.ai_status = "loading"
-    initialization = asyncio.create_task(
-        asyncio.to_thread(initialize_ai_services, app, checkpointer)
-    )
+    app.state.checkpointer = checkpointer
+    app.state.ai_status = "cold"
+    logger.info("StudyMate started with AI services cold; models and indexes load on first AI request.")
     try:
         yield
     finally:
-        # Do not close the checkpointer while the initializer still uses it.
-        await initialization
         close_checkpointer(checkpointer)
 
 

@@ -7,10 +7,9 @@ retrieved by the initial vector search, dramatically improving relevance.
 import logging
 import os
 import threading
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 from langchain_core.documents import Document
-from sentence_transformers import CrossEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ MODEL_NAME = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-base")
 
 from langsmith import traceable
 
-def _get_model() -> CrossEncoder:
+def _get_model() -> Any:
     """
     Lazy-loads and returns the cross-encoder model singleton.
     Guarded by a thread lock to ensure thread safety when running under 
@@ -44,6 +43,9 @@ def _get_model() -> CrossEncoder:
         if _RERANKER_MODEL is None:
             logger.info(f"Lazy-loading reranker model: {MODEL_NAME}")
             import torch
+            # Importing sentence-transformers pulls in its transformer stack;
+            # defer that import as well as the weights until reranking is used.
+            from sentence_transformers import CrossEncoder
             num_cpus = os.cpu_count() or 4
             if torch.get_num_threads() < num_cpus:
                 torch.set_num_threads(num_cpus)
