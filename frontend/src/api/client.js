@@ -1,4 +1,11 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
+// Vercel builds have no local `/api` proxy. Production therefore defaults to
+// the deployed Render service, while `.env.development` keeps local Vite
+// development on its `/api` proxy. Strip a trailing slash once so every API
+// helper can safely keep its existing leading-slash path.
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL
+  ?? 'https://studymate-rfmo.onrender.com'
+
+export const API_BASE_URL = configuredApiBaseUrl.replace(/\/+$/, '')
 
 export class ApiError extends Error {
   constructor(message, status) {

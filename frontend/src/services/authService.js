@@ -1,6 +1,7 @@
 /** Server-issued authentication sessions with bounded requests. */
+import { API_BASE_URL } from '../api/client'
+
 const SESSION_KEY = 'studymate_auth_session'
-const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL ?? '/api'
 export const AUTH_TIMEOUT_MS = 15000
 
 async function authRequest(path, body, token) {
