@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowRight, BookOpen, Check, Eye, EyeOff, LockKeyhole, Mail, UserRound, X } from 'lucide-react'
+import { ArrowRight, BookOpen, Check, Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import students from '../../assets/students-study.jpg'
 import '../../pages/LoginPage.css'
@@ -26,7 +26,6 @@ export default function AuthPage({ mode = 'login' }) {
   const [values, setValues] = useState({ name: '', email: '', password: '', confirm: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [resetOpen, setResetOpen] = useState(false)
   const update = (key) => (event) => { setValues({ ...values, [key]: event.target.value }); setError('') }
 
   async function submit(event) {
@@ -66,7 +65,6 @@ export default function AuthPage({ mode = 'login' }) {
               <Field id="email" label="Email address" icon={Mail} value={values.email} onChange={update('email')} type="email" autoComplete="email" placeholder="Enter your email" required maxLength={320} disabled={busy} />
               <Field id="password" label="Password" icon={LockKeyhole} password value={values.password} onChange={update('password')} autoComplete={isSignup ? 'new-password' : 'current-password'} placeholder={isSignup ? 'Create a password' : 'Enter your password'} required minLength={isSignup ? 6 : 1} disabled={busy} />
               {isSignup && <Field id="confirm-password" label="Confirm password" icon={LockKeyhole} password value={values.confirm} onChange={update('confirm')} autoComplete="new-password" placeholder="Confirm your password" required minLength={6} disabled={busy} />}
-              {!isSignup && <button className="auth-forgot" type="button" onClick={() => setResetOpen(true)}>Forgot password?</button>}
               {error && <p className="auth-error" role="alert">{error}</p>}
               <button className="auth-submit" type="submit" disabled={busy}>{busy ? (isSignup ? 'Creating account…' : 'Logging in…') : (isSignup ? 'Create account' : 'Log in')}{!busy && <ArrowRight aria-hidden="true" />}</button>
             </form>
@@ -75,6 +73,5 @@ export default function AuthPage({ mode = 'login' }) {
         </section>
       </div>
     </div>
-    {resetOpen && <div className="auth-dialog-backdrop" onClick={() => setResetOpen(false)}><div className="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="reset-title" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === 'Escape') setResetOpen(false) }}><button autoFocus className="auth-dialog-close" type="button" onClick={() => setResetOpen(false)} aria-label="Close password help"><X /></button><h2 id="reset-title">Password help</h2><p>Password reset is not available yet. Contact your StudyMate administrator for help accessing your account.</p><button className="auth-submit" type="button" onClick={() => setResetOpen(false)}>Back to login</button></div></div>}
   </main>
 }

@@ -68,6 +68,39 @@ def _get_ai_initialization_lock(app: FastAPI) -> threading.Lock:
     return lock
 
 
+def _get_document_initialization_lock(app: FastAPI) -> threading.Lock:
+    """Return the lock for the independently lazy document service."""
+    lock = getattr(app.state, "document_initialization_lock", None)
+    if lock is None:
+        lock = threading.Lock()
+        app.state.document_initialization_lock = lock
+    return lock
+
+
+def ensure_document_service(app: FastAPI) -> DocumentService:
+    """Create the PDF service without constructing LangGraph or chat tools.
+
+    Uploading a document requires the shared embedding model for its background
+    index job, but it must not initialize the LLM, graph, quiz/flashcard tools,
+    or perform a scan of every saved project index.
+    """
+    service = getattr(app.state, "document_service", None)
+    if service is not None:
+        return service
+    with _get_document_initialization_lock(app):
+        service = getattr(app.state, "document_service", None)
+        if service is None:
+            logger.info("Initializing document indexing service on demand.")
+            embeddings = getattr(app.state, "embeddings", None)
+            if embeddings is None:
+                embeddings = get_embeddings()
+                app.state.embeddings = embeddings
+            service = DocumentService(embeddings)
+            app.state.document_service = service
+            logger.info("Document indexing service ready; chat graph remains unloaded.")
+        return service
+
+
 def initialize_ai_services(app: FastAPI, checkpointer) -> None:
     """Compose heavyweight AI services on first study-tool request only.
 
@@ -77,7 +110,8 @@ def initialize_ai_services(app: FastAPI, checkpointer) -> None:
     """
     try:
         logger.info("Initializing StudyMate AI services on demand (models are not pre-warmed).")
-        embeddings = get_embeddings()
+        document_service = ensure_document_service(app)
+        embeddings = app.state.embeddings
         logger.info(
             "Embeddings initialized: model=%s (dim=%d, batch_size=%d)",
             getattr(embeddings, "model_name", "unknown"),
@@ -89,13 +123,7 @@ def initialize_ai_services(app: FastAPI, checkpointer) -> None:
         app.state.embeddings = embeddings
         app.state.llm = llm
         app.state.quiz_llm = quiz_llm
-        app.state.document_service = DocumentService(embeddings)
-        recovery_db = SessionLocal()
-        try:
-            app.state.document_service.recover_interrupted_indexing(recovery_db)
-            app.state.document_service.rebuild_or_invalidate_incompatible_indexes(recovery_db)
-        finally:
-            recovery_db.close()
+        app.state.document_service = document_service
         app.state.rag_query_service = RagQueryService(embeddings, llm)
         app.state.thread_service = ThreadService()
         app.state.space_service = SpaceService()

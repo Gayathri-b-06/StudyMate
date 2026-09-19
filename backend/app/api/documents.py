@@ -104,14 +104,11 @@ def get_document_status(
 
 
 @router.get("/threads/{thread_id}/documents", response_model=list[DocumentResponse])
-def list_documents(thread_id: str, service: Annotated[DocumentService, Depends(get_document_service)], db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]) -> list[DocumentResponse]:
+def list_documents(thread_id: str, db: Annotated[Session, Depends(get_db)], current_user: Annotated[User, Depends(get_current_user)]) -> list[DocumentResponse]:
     """List documents uploaded to an existing thread."""
     if not crud.verify_thread_owner(db, thread_id, current_user.id):
         raise HTTPException(status_code=404, detail="Thread not found.")
-    try:
-        return [_serialize(document) for document in service.list_for_thread(db, thread_id)]
-    except ThreadNotFoundForDocumentError as error:
-        raise HTTPException(status_code=404, detail="Thread not found.") from error
+    return [_serialize(document) for document in crud.list_documents_for_thread(db, thread_id)]
 
 
 @router.get("/projects/{project_id}/documents", response_model=list[DocumentResponse])

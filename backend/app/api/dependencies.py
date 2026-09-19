@@ -57,9 +57,14 @@ def get_chat_service(request: Request) -> ChatService:
 
 
 def get_document_service(request: Request) -> DocumentService:
-    """Return the process-scoped document service composed during application startup."""
-    require_ai_ready(request)
-    return cast(DocumentService, request.app.state.document_service)
+    """Return the independently lazy PDF indexing service.
+
+    Document upload/indexing needs embeddings, but not the LangGraph chat
+    graph, LLM clients, or other study tools.
+    """
+    from app.main import ensure_document_service
+
+    return ensure_document_service(request.app)
 
 
 def get_embeddings(request: Request) -> Any:
