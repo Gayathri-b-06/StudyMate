@@ -14,6 +14,7 @@ _BACKEND_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(_BACKEND_DIR / ".env", override=True)
 
 from fastapi import APIRouter, Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.agent.checkpointer import close_checkpointer, create_checkpointer
 from app.agent.graph import create_graph
@@ -48,6 +49,14 @@ from app.tools.flashcard_status_tool import create_flashcard_status_tool
 from scripts.migrate_spaces_projects import DEFAULT_PROJECT_ID
 
 logger = logging.getLogger(__name__)
+
+# Explicit origins are required when credentials are permitted. Keep the
+# Vite development hosts alongside the deployed Vercel frontend.
+ALLOWED_CORS_ORIGINS = (
+    "https://study-mate-one-liard.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+)
 
 
 def _get_ai_initialization_lock(app: FastAPI) -> threading.Lock:
@@ -144,6 +153,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     """Create the StudyMate FastAPI application."""
     app = FastAPI(title="StudyMate API", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(ALLOWED_CORS_ORIGINS),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     # Login/signup are public; /me and logout explicitly require a session.
     app.include_router(auth_router)
     protected = APIRouter(dependencies=[Depends(get_current_user)])
