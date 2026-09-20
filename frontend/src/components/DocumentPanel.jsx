@@ -4,7 +4,7 @@ import IndexTab from './common/IndexTab'
 
 const documentStatuses = {
   uploaded: { label: 'Uploaded', variant: 'muted', detail: 'File uploaded. Preparing indexing…' },
-  indexing: { label: 'Indexing', variant: 'warning', detail: 'Indexing… Embedding document remotely.' },
+  indexing: { label: 'Indexing', variant: 'warning', detail: 'Preparing your document for study.' },
   ready: { label: 'Ready', variant: 'success', detail: 'Available to AI Tutor and document search.' },
   error: { label: 'Error', variant: 'danger', detail: 'Indexing failed.' },
 }
@@ -145,6 +145,7 @@ export default function DocumentPanel({ projectId, documents: projectDocuments =
 
   /* Upload logic — returns immediately (202), polling handles the rest */
   const handleUpload = useCallback(async (files) => {
+    if (isUploading) return
     const pdfs = [...files].filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
     if (pdfs.length === 0) { setUploadError('Only PDF files are accepted.'); return }
     setUploadError('')
@@ -161,7 +162,7 @@ export default function DocumentPanel({ projectId, documents: projectDocuments =
     } finally {
       setIsUploading(false)
     }
-  }, [projectId])
+  }, [projectId, isUploading, onDocumentUploaded])
 
   /* Delete logic */
   async function handleDelete(doc) {
@@ -232,7 +233,11 @@ export default function DocumentPanel({ projectId, documents: projectDocuments =
           accept=".pdf,application/pdf"
           multiple
           className="hidden"
-          onChange={(e) => void handleUpload(e.target.files)}
+          disabled={isUploading}
+          onChange={(e) => {
+            void handleUpload(e.target.files)
+            e.target.value = ''
+          }}
         />
       </div>
 

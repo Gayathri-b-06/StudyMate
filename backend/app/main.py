@@ -80,9 +80,8 @@ def _get_document_initialization_lock(app: FastAPI) -> threading.Lock:
 def ensure_document_service(app: FastAPI) -> DocumentService:
     """Create the PDF service without constructing LangGraph or chat tools.
 
-    Uploading a document requires the shared embedding model for its background
-    index job, but it must not initialize the LLM, graph, quiz/flashcard tools,
-    or perform a scan of every saved project index.
+    Model loading belongs to the background index job, never the upload or
+    status request. Chat obtains the same cached embedding provider separately.
     """
     service = getattr(app.state, "document_service", None)
     if service is not None:
@@ -91,11 +90,7 @@ def ensure_document_service(app: FastAPI) -> DocumentService:
         service = getattr(app.state, "document_service", None)
         if service is None:
             logger.info("Initializing document indexing service on demand.")
-            embeddings = getattr(app.state, "embeddings", None)
-            if embeddings is None:
-                embeddings = get_embeddings()
-                app.state.embeddings = embeddings
-            service = DocumentService(embeddings)
+            service = DocumentService(getattr(app.state, "embeddings", None))
             app.state.document_service = service
             logger.info("Document indexing service ready; chat graph remains unloaded.")
         return service
@@ -111,7 +106,7 @@ def initialize_ai_services(app: FastAPI, checkpointer) -> None:
     try:
         logger.info("Initializing StudyMate AI services on demand (models are not pre-warmed).")
         document_service = ensure_document_service(app)
-        embeddings = app.state.embeddings
+        embeddings = get_embeddings()
         logger.info(
             "Embeddings initialized: model=%s (dim=%d, batch_size=%d)",
             getattr(embeddings, "model_name", "unknown"),

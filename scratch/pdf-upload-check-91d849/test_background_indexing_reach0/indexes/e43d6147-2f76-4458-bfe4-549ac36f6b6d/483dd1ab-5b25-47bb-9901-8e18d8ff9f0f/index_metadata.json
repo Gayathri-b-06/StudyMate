@@ -1,0 +1,13 @@
+{
+  "chunk_count": 1,
+  "created_at": "2026-09-20T08:36:28.012440+00:00",
+  "embedding_dimension": 3,
+  "embedding_identifier": "test-only",
+  "index_id": "7f415e4d4f704406adfde0ca8b990dd3",
+  "page_count": 1,
+  "schema_version": 1,
+  "source_count": 1,
+  "sources": [
+    "Unknown"
+  ]
+}

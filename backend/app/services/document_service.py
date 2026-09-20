@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _VECTORSTORE_DIR = get_runtime_data_dir() / "vectorstores"
 _INDEX_STATUS_RETRY_COUNT = 3
+_INDEXING_LOCK = threading.Lock()
 
 
 def _persist_index_status(
@@ -82,12 +83,14 @@ def _run_indexing_background(
     embeddings: Any,
 ) -> None:
     """Build and save the FAISS index in a worker thread, then update status in DB."""
-    from app.rag.ingest import load_and_chunk_pdf
-    from app.rag.store import build_and_save_index, delete_index, load_index_metadata, embedding_identifier
-
     t_start = time.perf_counter()
     try:
         _persist_index_status(document_id, status="indexing")
+        from app.rag.ingest import load_and_chunk_pdf
+        from app.rag.store import build_and_save_index, load_index_metadata, embedding_identifier
+        if embeddings is None:
+            from app.rag.embeddings import get_embeddings
+            embeddings = get_embeddings()
 
         # Check if this document already has a valid, compatible index on disk
         existing_metadata = load_index_metadata(save_path)
@@ -166,14 +169,26 @@ def _run_indexing_background(
         )
     except Exception as error:
         logger.exception("Indexing failed for document %s (%s)", document_id, filename)
-        delete_index(save_path)
+        # Cleanup must not hide the original indexing error or leave a job pending.
+        try:
+            from app.rag.store import delete_index
+            delete_index(save_path)
+        except Exception:
+            logger.exception("Could not clean up failed index for document %s", document_id)
         _persist_index_status(document_id, status="error", error_message=str(error)[:1000] or type(error).__name__)
+
+
+def _run_indexing_serialized(*args) -> None:
+    # Multiple uploaded PDFs must not run model inference concurrently on a
+    # memory-constrained server. Waiting documents retain their uploaded state.
+    with _INDEXING_LOCK:
+        _run_indexing_background(*args)
 
 
 class DocumentService:
     """Ingest PDFs and coordinate their existing FAISS stores with CRUD records."""
 
-    def __init__(self, embeddings: Any) -> None:
+    def __init__(self, embeddings: Any = None) -> None:
         self._embeddings = embeddings
 
     def upload(
@@ -213,7 +228,7 @@ class DocumentService:
 
             # A non-daemon worker preserves its final DB commit on graceful reload.
             t = threading.Thread(
-                target=_run_indexing_background,
+                target=_run_indexing_serialized,
                 args=(
                     document_id,
                     filename,
