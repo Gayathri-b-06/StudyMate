@@ -15,11 +15,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db import crud
 from app.db.models import Document
 from app.db.session import SessionLocal
+from app.runtime_paths import get_runtime_data_dir
 
 logger = logging.getLogger(__name__)
 
-_BACKEND_DIR = Path(__file__).resolve().parents[2]
-_VECTORSTORE_DIR = _BACKEND_DIR / "vectorstores"
+_VECTORSTORE_DIR = get_runtime_data_dir() / "vectorstores"
 _INDEX_STATUS_RETRY_COUNT = 3
 
 

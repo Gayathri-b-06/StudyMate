@@ -6,9 +6,9 @@ import sqlite3
 from pathlib import Path
 
 from langgraph.checkpoint.sqlite import SqliteSaver
+from app.runtime_paths import get_runtime_data_dir
 
-_BACKEND_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_CHECKPOINT_DATABASE_PATH = _BACKEND_DIR / "langgraph_checkpoints.db"
+DEFAULT_CHECKPOINT_DATABASE_PATH = get_runtime_data_dir() / "langgraph_checkpoints.db"
 
 
 def create_checkpointer(

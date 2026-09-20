@@ -110,7 +110,13 @@ Back up the database before any manual migration. The named calibration/benchmar
 
 ## Deployment status and requirements
 
-**No deployment has been performed.** Protected endpoints now require a valid server-issued session; missing, malformed, revoked or unrecognized Bearer credentials return 401. Only login/signup and API documentation are public; `/auth/me` and logout require authentication. Admin authorization reads the backend user role, never client role headers. The default/demo login fallback is removed. Password hashing still uses salted SHA-256 rather than a password-specific adaptive KDF; harden password storage and supply a private grading-signature key before exposing the API. See the requirements below for remaining deployment work.
+The Vercel frontend is configured to call `https://studymate-rfmo.onrender.com`. Protected endpoints require a valid server-issued session; missing, malformed, revoked or unrecognized Bearer credentials return 401. Only login/signup and API documentation are public; `/auth/me` and logout require authentication. Admin authorization reads the backend user role, never client role headers. The default/demo login fallback is removed. Password hashing still uses salted SHA-256 rather than a password-specific adaptive KDF; harden password storage and supply a private grading-signature key before exposing the API.
+
+### Render production setup
+
+Use `render.yaml` as the Render Blueprint, or mirror its settings in the existing Render service: set the service root directory to `backend`, run `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, and mount a persistent disk at `/var/data`. Set `STUDYMATE_DATA_DIR=/var/data`; it stores `chatbot.db` (accounts and sessions), `langgraph_checkpoints.db`, and `vectorstores/` (uploaded PDF indexes). Without that disk, every Render redeploy/restart can erase users and PDF data, leading to failed login and missing uploads.
+
+Set `GROQ_API_KEY`, `GROQ_QUIZ_API_KEY`, and a private `STUDYMATE_SECRET_KEY` in Render's Environment settings. In Vercel, set `VITE_API_BASE_URL=https://studymate-rfmo.onrender.com` for Production and redeploy after changing it. The backend already allows `https://study-mate-one-liard.vercel.app` through CORS.
 
 After those blockers are addressed, the current architecture calls for:
 

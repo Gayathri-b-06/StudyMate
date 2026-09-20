@@ -33,6 +33,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.models import Base
+from app.runtime_paths import get_runtime_data_dir
 
 # ---------------------------------------------------------------------------
 # Connection URL
@@ -45,7 +46,7 @@ from app.db.models import Base
 
 
 
-BASE_DIR = Path(__file__).resolve().parents[2]   # backend/
+BASE_DIR = get_runtime_data_dir()
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",

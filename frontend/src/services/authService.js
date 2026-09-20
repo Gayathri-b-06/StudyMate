@@ -1,5 +1,5 @@
 /** Server-issued authentication sessions with bounded requests. */
-import { API_BASE_URL } from '../api/client'
+import { API_BASE_URL } from '../api/client.js'
 
 const SESSION_KEY = 'studymate_auth_session'
 export const AUTH_TIMEOUT_MS = 15000

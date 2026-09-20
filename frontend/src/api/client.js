@@ -2,8 +2,9 @@
 // the deployed Render service, while `.env.development` keeps local Vite
 // development on its `/api` proxy. Strip a trailing slash once so every API
 // helper can safely keep its existing leading-slash path.
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL
-  ?? 'https://studymate-rfmo.onrender.com'
+const viteEnv = import.meta.env
+const configuredApiBaseUrl = viteEnv?.VITE_API_BASE_URL
+  ?? (viteEnv ? 'https://studymate-rfmo.onrender.com' : '/api')
 
 export const API_BASE_URL = configuredApiBaseUrl.replace(/\/+$/, '')
 
